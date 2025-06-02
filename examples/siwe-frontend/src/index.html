@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>2x4 Grid</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background-color: #f9f9f9;
+      font-family: sans-serif;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(400px, auto) minmax(0, 1fr);
+      gap: 1rem 2rem;
+      background: #fff;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    }
+
+    .grid button {
+      height: 40px;
+      line-height: 40px;
+      padding: 0 1rem;
+      font-size: 1rem;
+      border: none;
+      border-radius: 6px;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+      box-sizing: border-box;
+    }
+
+    .grid button:hover {
+      background-color: #0056b3;
+    }
+
+    .grid input {
+      padding: 0.6rem 1rem;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 0.4rem;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+      margin-top: 1ch;
+    }
+
+    .grid .text {
+      align-self: center;
+      width: 50ch;
+      line-height: 1.6;
+      font-size: 1rem;
+      color: #333;
+      word-break: break-word;
+    }
+
+    .grid .panel {
+      display: flex;
+      flex-direction: column;
+    }
+  </style>
+</head>
+<body>
+  <div class="grid">
+    <button id='connectWalletBtn'>Connect wallet</button>
+    <div class="text" id='connectWalletLabel'>Wallet not connected</div>
+
+    <button id='createMessageBtn'>Create message</button>
+    <div class="text" id='createMessageLabel'></div>
+
+    <button id='signMessageBtn'>Sign message</button>
+    <div class="text" id='signMessageLabel'></div>
+
+    <button id='verifyBtn'>Authenticate with backend</button>
+    <div class="text" id='verifyLabel'></div>
+
+    <div class="panel">
+      <button id='setTokenBtn'>Configure auth token</button>
+      <input type="text" id='setTokenInput' class="input" placeholder="auth token">
+    </div>
+    <div class="text" id='setTokenLabel'></div>
+
+    <button id='queryBlockNumberBtn'>Query block number</button>
+    <div class="text" id='queryBlockNumberLabel'></div>
+
+    <div class="panel">
+      <button id='queryBalanceBtn'>Query balance</button>
+      <input type="text" id='queryBalanceInput' class="input" placeholder="address">
+    </div>
+    <div class="text" id='queryBalanceLabel'></div>
+
+  </div>
+</body>
+</html>
