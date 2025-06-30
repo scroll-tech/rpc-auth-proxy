@@ -10,8 +10,8 @@ use tower_http::auth::AsyncRequireAuthorizationLayer;
 use auth::{AuthenticationMiddleware, JwtSigner, SiweAuthRpcImpl, SiweAuthRpcServer};
 use proxy::{EthRpcProxyImpl, EthRpcProxyServer};
 
-const LOCAL_ENDPOINT: &str = "127.0.0.1:1234";
-const REMOTE_ENDPOINT: &str = "https://rpc.scroll.io";
+const LOCAL_ENDPOINT: &str = "0.0.0.0:8080";
+const REMOTE_ENDPOINT: &str = "http://scroll:8545";
 
 fn all_apis(jwt: JwtSigner) -> anyhow::Result<impl Into<Methods>> {
     let auth_server = SiweAuthRpcImpl::new(jwt);
@@ -38,6 +38,7 @@ pub async fn run_server() -> anyhow::Result<SocketAddr> {
 
     let addr = server.local_addr()?;
     println!("Server is listening on {}", addr);
+    println!("Remote endpoint is {}", REMOTE_ENDPOINT);
 
     let handle = server.start(all_apis(jwt)?);
     handle.stopped().await;
