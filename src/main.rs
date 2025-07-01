@@ -1,6 +1,8 @@
 mod auth;
 mod proxy;
 
+use std::io::{stdout, Write};
+
 use dashmap::DashSet;
 use jsonrpsee::{Methods, server::Server};
 use std::net::SocketAddr;
@@ -39,6 +41,10 @@ pub async fn run_server() -> anyhow::Result<SocketAddr> {
     let addr = server.local_addr()?;
     println!("Server is listening on {}", addr);
     println!("Remote endpoint is {}", REMOTE_ENDPOINT);
+
+    // not sure why this is needed, but running in a linux/amd64
+    // Docker container without this exits immediately.
+    stdout().flush().unwrap();
 
     let handle = server.start(all_apis(jwt)?);
     handle.stopped().await;
