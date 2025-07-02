@@ -13,7 +13,7 @@ use auth::{AuthenticationMiddleware, JwtSigner, SiweAuthRpcImpl, SiweAuthRpcServ
 use proxy::{EthRpcProxyImpl, EthRpcProxyServer};
 
 const LOCAL_ENDPOINT: &str = "0.0.0.0:8080";
-const REMOTE_ENDPOINT: &str = "http://scroll:8545";
+const REMOTE_ENDPOINT: &str = "http://validium-sequencer:8545";
 
 fn all_apis(jwt: JwtSigner) -> anyhow::Result<impl Into<Methods>> {
     let auth_server = SiweAuthRpcImpl::new(jwt);
