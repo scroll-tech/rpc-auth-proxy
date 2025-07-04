@@ -12,7 +12,7 @@ use super::jwt::JwtSigner;
 
 type NonceCache = Arc<Cache<String, ()>>;
 
-const NONCE_SIZE: usize = 16;
+const NONCE_SIZE: usize = 64;
 
 #[rpc(server, client, namespace = "siwe")]
 pub trait SiweAuthRpc {
