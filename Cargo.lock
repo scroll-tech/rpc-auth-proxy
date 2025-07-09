@@ -6756,6 +6756,7 @@ dependencies = [
  "alloy-rlp",
  "alloy-rpc-types",
  "anyhow",
+ "chrono",
  "clap",
  "config",
  "dashmap",

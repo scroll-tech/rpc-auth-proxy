@@ -8,6 +8,7 @@ alloy = "1.0.9"
 alloy-rlp = "0.3.12"
 alloy-rpc-types = "1.0.9"
 anyhow = "1.0.98"
+chrono = "0.4.41"
 clap = { version = "4.5.40", features = ["derive"] }
 config = "0.15.11"
 dashmap = "6.1.0"

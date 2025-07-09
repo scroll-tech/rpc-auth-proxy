@@ -6,5 +6,5 @@ mod siwe;
 
 pub use access_level::AccessLevel;
 pub use auth_middleware::AuthenticationMiddleware;
-pub use jwt::JwtSigner;
+pub use jwt::{JwtSigner, JwtSignerKeyConfig};
 pub use siwe::{SiweAuthRpcImpl, SiweAuthRpcServer};

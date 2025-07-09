@@ -8,12 +8,10 @@ use dashmap::DashSet;
 use jsonrpsee::{Methods, server::Server};
 use tower::ServiceBuilder;
 use tower_http::auth::AsyncRequireAuthorizationLayer;
-
 use auth::{AuthenticationMiddleware, JwtSigner, SiweAuthRpcImpl, SiweAuthRpcServer};
 use proxy::{EthRpcProxyImpl, EthRpcProxyServer};
 
 use clap::Parser;
-use serde::Deserialize;
 use config;
 
 /// Command line arguments
@@ -34,12 +32,16 @@ struct CliArgs {
 }
 
 /// Structure of the config file
-#[derive(Debug, Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 struct AppConfig {
     #[serde(default = "default_bind_address")]
     bind_address: String,
     #[serde(default = "default_upstream_url")]
     upstream_url: String,
+    admin_keys: Vec<String>,
+    jwt_expiry_secs: usize,
+    default_kid: String,
+    jwt_signer_keys: Vec<auth::JwtSignerKeyConfig>,
 }
 
 /// Default bind address if not specified anywhere
@@ -53,16 +55,15 @@ fn default_upstream_url() -> String {
 }
 
 /// Load configuration from CLI, config file, and defaults
-fn load_config() -> anyhow::Result<(String, String)> {
+fn load_config() -> anyhow::Result<AppConfig> {
     let args = CliArgs::parse();
 
-    // Load config.toml
     let mut cfg: AppConfig = config::Config::builder()
-        .add_source(config::File::from(args.config.as_ref()).required(false))
+        .add_source(config::File::from(args.config.as_ref()).required(true))
         .build()?
         .try_deserialize()?;
 
-    // Override with CLI arguments
+    // Override config with CLI arguments if provided
     if let Some(val) = args.bind_address {
         cfg.bind_address = val;
     }
@@ -79,11 +80,11 @@ fn load_config() -> anyhow::Result<(String, String)> {
         anyhow::bail!("Invalid upstream_url: {}. Must start with http:// or https://", cfg.upstream_url);
     }
 
-    Ok((cfg.bind_address, cfg.upstream_url))
+    Ok(cfg)
 }
 
-fn all_apis(jwt: JwtSigner, upstream_url: &str) -> anyhow::Result<impl Into<Methods>> {
-    let auth_server = SiweAuthRpcImpl::new(jwt);
+fn all_apis(jwt: JwtSigner, jwt_expiry_secs: usize, upstream_url: &str) -> anyhow::Result<impl Into<Methods>> {
+    let auth_server = SiweAuthRpcImpl::new(jwt, jwt_expiry_secs);
     let proxy_server = EthRpcProxyImpl::new(upstream_url)?;
     let mut methods = auth_server.into_rpc();
     methods.merge(proxy_server.into_rpc())?;
@@ -91,12 +92,15 @@ fn all_apis(jwt: JwtSigner, upstream_url: &str) -> anyhow::Result<impl Into<Meth
 }
 
 pub async fn run_server() -> anyhow::Result<SocketAddr> {
-    let (bind_address, upstream_url) = load_config()?;
+    let cfg = load_config()?;
 
-    let jwt = JwtSigner::new();
+    let jwt = JwtSigner::from_config(cfg.jwt_signer_keys.as_slice(), &cfg.default_kid)?;
 
+    // Only load admin_keys from config file
     let admin_keys = DashSet::default();
-    admin_keys.insert("example_admin_token".to_owned());
+    for key in cfg.admin_keys {
+        admin_keys.insert(key);
+    }
 
     let http_middleware = ServiceBuilder::new().layer(AsyncRequireAuthorizationLayer::new(
         AuthenticationMiddleware::new(jwt.clone(), admin_keys),
@@ -104,18 +108,18 @@ pub async fn run_server() -> anyhow::Result<SocketAddr> {
 
     let server = Server::builder()
         .set_http_middleware(http_middleware)
-        .build(bind_address.parse::<SocketAddr>()?)
+        .build(cfg.bind_address.parse::<SocketAddr>()?)
         .await?;
 
     let addr = server.local_addr()?;
     println!("Server is listening on {}", addr);
-    println!("Upstream endpoint is {}", upstream_url);
+    println!("Upstream endpoint is {}", cfg.upstream_url);
 
     // not sure why this is needed, but running in a linux/amd64
     // Docker container without this exits immediately.
     stdout().flush().unwrap();
 
-    let handle = server.start(all_apis(jwt, &upstream_url)?);
+    let handle = server.start(all_apis(jwt, cfg.jwt_expiry_secs, &cfg.upstream_url)?);
     handle.stopped().await;
     Ok(addr)
 }
@@ -124,4 +128,53 @@ pub async fn run_server() -> anyhow::Result<SocketAddr> {
 async fn main() -> anyhow::Result<()> {
     run_server().await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use config::{Config, File, FileFormat};
+
+    #[test]
+    fn test_app_config_parse_from_toml() {
+        // Example TOML configuration string
+        let toml = r#"
+            bind_address = "127.0.0.1:12345"
+            upstream_url = "http://example.com:8545"
+            admin_keys = [
+              "admin-token-1-abcdefg",
+              "admin-token-2-hijklmn"
+            ]
+            jwt_expiry_secs = 3600
+            default_kid = "key-2025-07"
+
+            jwt_signer_keys = [
+              { kid = "key-2025-07", secret = "supersecret1" },
+              { kid = "key-2025-06", secret = "supersecret2" }
+            ]
+        "#;
+
+        // Parse config from string
+        let cfg: AppConfig = Config::builder()
+            .add_source(File::from_str(toml, FileFormat::Toml))
+            .build()
+            .unwrap()
+            .try_deserialize()
+            .unwrap();
+
+        // Check values
+        assert_eq!(cfg.bind_address, "127.0.0.1:12345");
+        assert_eq!(cfg.upstream_url, "http://example.com:8545");
+        assert_eq!(cfg.admin_keys, vec![
+            "admin-token-1-abcdefg".to_string(),
+            "admin-token-2-hijklmn".to_string()
+        ]);
+        assert_eq!(cfg.jwt_expiry_secs, 3600);
+        assert_eq!(cfg.default_kid, "key-2025-07".to_string());
+        assert_eq!(cfg.jwt_signer_keys.len(), 2);
+        assert_eq!(cfg.jwt_signer_keys[0].kid, "key-2025-07");
+        assert_eq!(cfg.jwt_signer_keys[0].secret, "supersecret1");
+        assert_eq!(cfg.jwt_signer_keys[1].kid, "key-2025-06");
+        assert_eq!(cfg.jwt_signer_keys[1].secret, "supersecret2");
+    }
 }
