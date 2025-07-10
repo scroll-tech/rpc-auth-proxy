@@ -3,7 +3,7 @@
 1. Run the proxy server:
 
 ```sh
-cargo run
+cargo run -- --config config.toml
 ```
 
 2. Run the example frontend:
