@@ -29,7 +29,7 @@ bind_address = "0.0.0.0:8090"
 upstream_url = "http://validium-sequencer:8545"
 
 # The L2 RPC endpoint for onchain verification (smart contract signature verification)
-l2_rpc_url = "http://validium-sequencer:8545"
+l2_rpc_url = "http://validium-l2:8545"
 
 # List of admin API tokens. Only users with these tokens can access admin functions.
 admin_keys = [

@@ -61,7 +61,7 @@ pub struct SiweAuthRpcImpl {
 }
 
 impl SiweAuthRpcImpl {
-    pub fn new(jwt: JwtSigner, jwt_expiry_secs: usize, rpc_url: &str) -> anyhow::Result<Self> {
+    pub async fn new(jwt: JwtSigner, jwt_expiry_secs: usize, l2_rpc_url: &str) -> anyhow::Result<Self> {
         let cache: NonceCache = Arc::new(
             Cache::builder()
                 .time_to_live(Duration::from_secs(300))
@@ -70,12 +70,10 @@ impl SiweAuthRpcImpl {
         );
 
         // Create L2 RPC provider for onchain calls
-        let rt = tokio::runtime::Handle::current();
-        let rpc_provider = rt.block_on(async {
-            ProviderBuilder::new()
-                .connect(rpc_url)
-                .await
-        }).map_err(|e| anyhow::anyhow!("Failed to create RPC provider: {}", e))?;
+        let rpc_provider = ProviderBuilder::new()
+            .connect(l2_rpc_url)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to create L2 RPC provider: {}", e))?;
 
         Ok(Self { 
             cache, 

@@ -1,11 +1,11 @@
 # The address for the server to bind to
-bind_address = "0.0.0.0:8090"
+bind_address = "0.0.0.0:1234"
 
 # The upstream HTTP endpoint (e.g. for forwarding requests)
-upstream_url = "http://validium-sequencer:8545"
+upstream_url = "https://rpc.scroll.io"
 
 # The L2 RPC endpoint for onchain verification (smart contract signature verification)
-l2_rpc_url = "http://validium-sequencer:8545"
+l2_rpc_url = "https://rpc.scroll.io"
 
 # List of admin API tokens. Only users with these tokens can access admin functions.
 admin_keys = [

@@ -91,8 +91,8 @@ fn load_config() -> anyhow::Result<AppConfig> {
     Ok(cfg)
 }
 
-fn all_apis(jwt: JwtSigner, jwt_expiry_secs: usize, upstream_url: &str, l2_rpc_url: &str) -> anyhow::Result<impl Into<Methods>> {
-    let auth_server = SiweAuthRpcImpl::new(jwt, jwt_expiry_secs, l2_rpc_url)?;
+async fn all_apis(jwt: JwtSigner, jwt_expiry_secs: usize, upstream_url: &str, l2_rpc_url: &str) -> anyhow::Result<impl Into<Methods>> {
+    let auth_server = SiweAuthRpcImpl::new(jwt, jwt_expiry_secs, l2_rpc_url).await?;
     let proxy_server = EthRpcProxyImpl::new(upstream_url)?;
     let mut methods = auth_server.into_rpc();
     methods.merge(proxy_server.into_rpc())?;
@@ -122,12 +122,14 @@ pub async fn run_server() -> anyhow::Result<SocketAddr> {
     let addr = server.local_addr()?;
     println!("Server is listening on {}", addr);
     println!("Upstream endpoint is {}", cfg.upstream_url);
+    println!("L2 RPC endpoint is {}", cfg.l2_rpc_url);
 
     // not sure why this is needed, but running in a linux/amd64
     // Docker container without this exits immediately.
     stdout().flush().unwrap();
 
-    let handle = server.start(all_apis(jwt, cfg.jwt_expiry_secs, &cfg.upstream_url, &cfg.l2_rpc_url)?);
+    let methods = all_apis(jwt, cfg.jwt_expiry_secs, &cfg.upstream_url, &cfg.l2_rpc_url).await?;
+    let handle = server.start(methods);
     handle.stopped().await;
     Ok(addr)
 }
