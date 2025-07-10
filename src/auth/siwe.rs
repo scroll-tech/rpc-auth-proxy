@@ -122,7 +122,7 @@ impl SiweAuthRpcImpl {
 
         // Execute onchain call
         let result = self.rpc_provider.call(request).await?;
-        
+
         // Check if return value matches ERC-1271 magic value
         if result.len() >= 4 {
             let magic_value = &result[0..4];
@@ -153,7 +153,7 @@ impl SiweAuthRpcImpl {
     ) -> anyhow::Result<bool> {
         let address = message.address.into();
         let account_type = self.classify_account(address).await?;
-        
+
         match account_type {
             AccountType::Eoa => {
                 // EOA: use traditional ECDSA verification
@@ -169,7 +169,7 @@ impl SiweAuthRpcImpl {
                 // First try ERC-1271 (delegated code might implement it)
                 let message_hash = message.eip191_hash()?;
                 let erc1271_result = self.verify_erc1271_signature(address, message_hash.into(), signature).await;
-                
+
                 match erc1271_result {
                     Ok(true) => {
                         // ERC-1271 verification succeeded
