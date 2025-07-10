@@ -43,13 +43,35 @@ let signature = null;
 
 async function connectWallet() {
     await web3modal.open();
-    const provider = web3modal.getWalletProvider();
-    if (!provider) throw new Error('No wallet provider found');
-    walletProvider = new BrowserProvider(provider);
-    const signer = await walletProvider.getSigner();
-    const address = await signer.getAddress();
-    queryBalanceInput.value = address.toLowerCase();
-    return address;
+
+    return new Promise((resolve, reject) => {
+        const unsubscribe = web3modal.subscribeProvider((state) => {
+            if (state.provider) {
+                unsubscribe();
+
+                try {
+                    const provider = web3modal.getWalletProvider();
+                    if (!provider) throw new Error('No wallet provider found');
+
+                    walletProvider = new BrowserProvider(provider);
+
+                    walletProvider.getSigner().then(signer => {
+                        signer.getAddress().then(address => {
+                            queryBalanceInput.value = address.toLowerCase();
+                            resolve(address);
+                        });
+                    });
+                } catch (err) {
+                    reject(err);
+                }
+            }
+        });
+
+        setTimeout(() => {
+            unsubscribe();
+            reject(new Error('Connection timeout. Please try again.'));
+        }, 120000);
+    });
 }
 
 async function createMessage() {
@@ -71,6 +93,25 @@ async function createMessage() {
     message = draft.prepareMessage();
     return `Message: ${message}`;
 }
+
+web3modal.subscribeProvider((state) => {
+  if (!state.provider) {
+    walletProvider = null;
+    message = null;
+    signature = null;
+
+    document.getElementById('connectWalletLabel').innerText = '';
+    document.getElementById('createMessageLabel').innerText = '';
+    document.getElementById('signMessageLabel').innerText = '';
+    document.getElementById('verifyLabel').innerText = '';
+    document.getElementById('setTokenLabel').innerText = '';
+    document.getElementById('queryBlockNumberLabel').innerText = '';
+    document.getElementById('queryBalanceLabel').innerText = '';
+
+    queryBalanceInput.value = '';
+    setTokenInput.value = '';
+  }
+});
 
 async function signMessage() {
     const signer = await walletProvider.getSigner();

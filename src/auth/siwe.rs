@@ -86,17 +86,17 @@ impl SiweAuthRpcImpl {
     /// Classify account type based on code size and content
     async fn classify_account(&self, address: Address) -> anyhow::Result<AccountType> {
         let code = self.rpc_provider.get_code_at(address).await?;
-        
+
         if code.is_empty() {
             // No code = EOA
             return Ok(AccountType::Eoa);
         }
-        
+
         if code.len() == EIP7702_CODE_SIZE && code.starts_with(&[0xef, 0x01, 0x00]) {
             // EIP-7702: code size is 23 bytes and starts with 0xef0100
             return Ok(AccountType::Eip7702);
         }
-        
+
         // Has code but not EIP-7702 = Contract
         Ok(AccountType::Contract)
     }
