@@ -260,16 +260,19 @@ use super::*;
                 call_responses: HashMap::new(),
             }
         }
+
         fn with_eoa(mut self, address: Address) -> Self {
             self.code_responses.insert(address, Bytes::new());
             self
         }
+
         fn with_contract(mut self, address: Address) -> Self {
             self.code_responses.insert(address, Bytes::from(vec![0x60, 0x80, 0x60, 0x40]));
             let response = Bytes::from(ERC1271_MAGIC_VALUE.to_vec());
             self.call_responses.insert(address, response);
             self
         }
+
         fn with_eip7702(mut self, address: Address, delegated_address: Address) -> Self {
             let mut code = vec![0xef, 0x01, 0x00];
             code.extend_from_slice(delegated_address.as_slice());
@@ -283,6 +286,7 @@ use super::*;
         fn root(&self) -> &RootProvider {
             panic!("MockProvider::root not implemented");
         }
+
         fn get_code_at(&self, address: Address) -> RpcWithBlock<Address, Bytes> {
             let code_responses = self.code_responses.clone();
             RpcWithBlock::new_provider(move |_| {
