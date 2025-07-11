@@ -28,9 +28,6 @@ bind_address = "0.0.0.0:8090"
 # The upstream HTTP endpoint (e.g. for forwarding requests)
 upstream_url = "http://validium-sequencer:8545"
 
-# The L2 RPC endpoint for onchain verification (smart contract signature verification)
-l2_rpc_url = "http://validium-l2:8545"
-
 # List of admin API tokens. Only users with these tokens can access admin functions.
 admin_keys = [
   "admin-token-1-abcdefg",
@@ -65,7 +62,7 @@ By default, the server uses `config.toml` in the current directory. You can use 
 
 ### Defaults
 
-If not specified, `bind_address` defaults to `0.0.0.0:8080`, `upstream_url` defaults to `http://validium-sequencer:8545`, and `l2_rpc_url` defaults to `http://localhost:8545`.
+If not specified, `bind_address` defaults to `0.0.0.0:8080`, `upstream_url` defaults to `http://validium-sequencer:8545`.
 
 ### Precedence
 
@@ -75,18 +72,11 @@ Precedence order for configuration is: CLI arguments > `config.toml` > defaults.
 
 This proxy server supports Sign-In with Ethereum (SIWE) authentication with comprehensive signature verification for different account types:
 
-1. EOA (Externally Owned Accounts): Traditional ECDSA signature verification
+1. EOA (Externally Owned Accounts): Traditional ECDSA signature verification.
 
-2. Smart Contract Accounts: ERC-1271 signature verification via onchain calls
+2. Smart Contract Accounts: ERC-1271 signature verification via onchain calls.
 
-3. EIP-7702 Accounts: Hybrid verification supporting both contract and EOA signatures
-
-### L2 RPC Configuration
-The `l2_rpc_url` field in the configuration specifies the L2 RPC endpoint used for:
-
-- Checking account code to determine account type
-
-- Performing ERC-1271 signature verification for smart contract accounts
+3. EIP-7702 Accounts: Hybrid verification supporting both contract and EOA signatures.
 
 ## Authorization & Admin Key Management
 

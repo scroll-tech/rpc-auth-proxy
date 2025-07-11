@@ -38,18 +38,10 @@ struct AppConfig {
     bind_address: String,
     #[serde(default = "default_upstream_url")]
     upstream_url: String,
-    // L2 RPC URL for smart contract signature verification
-    #[serde(default = "default_l2_rpc_url")]
-    l2_rpc_url: String,
     admin_keys: Vec<String>,
     jwt_expiry_secs: usize,
     default_kid: String,
     jwt_signer_keys: Vec<auth::JwtSignerKeyConfig>,
-}
-
-// Default L2 RPC URL
-fn default_l2_rpc_url() -> String {
-    "http://localhost:8545".to_string()
 }
 
 /// Default bind address if not specified anywhere
@@ -91,8 +83,8 @@ fn load_config() -> anyhow::Result<AppConfig> {
     Ok(cfg)
 }
 
-async fn all_apis(jwt: JwtSigner, jwt_expiry_secs: usize, upstream_url: &str, l2_rpc_url: &str) -> anyhow::Result<impl Into<Methods>> {
-    let auth_server = SiweAuthRpcImpl::new(jwt, jwt_expiry_secs, l2_rpc_url).await?;
+async fn all_apis(jwt: JwtSigner, jwt_expiry_secs: usize, upstream_url: &str) -> anyhow::Result<impl Into<Methods>> {
+    let auth_server = SiweAuthRpcImpl::new(jwt, jwt_expiry_secs, upstream_url).await?;
     let proxy_server = EthRpcProxyImpl::new(upstream_url)?;
     let mut methods = auth_server.into_rpc();
     methods.merge(proxy_server.into_rpc())?;
@@ -122,13 +114,12 @@ pub async fn run_server() -> anyhow::Result<SocketAddr> {
     let addr = server.local_addr()?;
     println!("Server is listening on {}", addr);
     println!("Upstream endpoint is {}", cfg.upstream_url);
-    println!("L2 RPC endpoint is {}", cfg.l2_rpc_url);
 
     // not sure why this is needed, but running in a linux/amd64
     // Docker container without this exits immediately.
     stdout().flush().unwrap();
 
-    let methods = all_apis(jwt, cfg.jwt_expiry_secs, &cfg.upstream_url, &cfg.l2_rpc_url).await?;
+    let methods = all_apis(jwt, cfg.jwt_expiry_secs, &cfg.upstream_url).await?;
     let handle = server.start(methods);
     handle.stopped().await;
     Ok(addr)

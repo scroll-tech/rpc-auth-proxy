@@ -56,12 +56,12 @@ pub struct SiweAuthRpcImpl {
     jwt: JwtSigner,
     // JWT expiration time in seconds, timeout is not exact, there is a 60s leeway by default
     jwt_expiry_secs: usize,
-    // L2 RPC provider for get code and signature verification
+    // RPC provider for get code and signature verification
     rpc_provider: Arc<dyn Provider>,
 }
 
 impl SiweAuthRpcImpl {
-    pub async fn new(jwt: JwtSigner, jwt_expiry_secs: usize, l2_rpc_url: &str) -> anyhow::Result<Self> {
+    pub async fn new(jwt: JwtSigner, jwt_expiry_secs: usize, remote_rpc_url: &str) -> anyhow::Result<Self> {
         let cache: NonceCache = Arc::new(
             Cache::builder()
                 .time_to_live(Duration::from_secs(300))
@@ -69,11 +69,11 @@ impl SiweAuthRpcImpl {
                 .build(),
         );
 
-        // Create L2 RPC provider for onchain calls
+        // Create RPC provider for onchain calls
         let rpc_provider = ProviderBuilder::new()
-            .connect(l2_rpc_url)
+            .connect(remote_rpc_url)
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to create L2 RPC provider: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Failed to create RPC provider: {}", e))?;
 
         Ok(Self { 
             cache, 
