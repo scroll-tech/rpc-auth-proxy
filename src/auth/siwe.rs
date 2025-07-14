@@ -1,4 +1,5 @@
 use alloy::primitives::Bytes;
+use chrono::Utc;
 use jsonrpsee::core::{RpcResult, async_trait};
 use jsonrpsee::proc_macros::rpc;
 use moka::future::Cache;
@@ -6,7 +7,6 @@ use rand::distr::{Alphanumeric, SampleString};
 use siwe::{Message, VerificationOpts};
 use std::sync::Arc;
 use std::time::Duration;
-use chrono::Utc;
 
 use super::error::{internal_error, invalid_params};
 use super::jwt::JwtSigner;
@@ -40,7 +40,11 @@ impl SiweAuthRpcImpl {
                 .build(),
         );
 
-        Self { cache, jwt, jwt_expiry_secs }
+        Self {
+            cache,
+            jwt,
+            jwt_expiry_secs,
+        }
     }
 }
 

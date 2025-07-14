@@ -1,15 +1,15 @@
 mod auth;
 mod proxy;
 
-use std::io::{stdout, Write};
+use std::io::{Write, stdout};
 use std::net::SocketAddr;
 
+use auth::{AuthenticationMiddleware, JwtSigner, SiweAuthRpcImpl, SiweAuthRpcServer};
 use dashmap::DashSet;
 use jsonrpsee::{Methods, server::Server};
+use proxy::{EthRpcProxyImpl, EthRpcProxyServer};
 use tower::ServiceBuilder;
 use tower_http::auth::AsyncRequireAuthorizationLayer;
-use auth::{AuthenticationMiddleware, JwtSigner, SiweAuthRpcImpl, SiweAuthRpcServer};
-use proxy::{EthRpcProxyImpl, EthRpcProxyServer};
 
 use clap::Parser;
 use config;
@@ -72,18 +72,31 @@ fn load_config() -> anyhow::Result<AppConfig> {
     }
 
     // Validate bind_address format
-    cfg.bind_address.parse::<std::net::SocketAddr>()
-        .map_err(|_| anyhow::anyhow!("Invalid bind_address: {}. Expected format like 0.0.0.0:8080", cfg.bind_address))?;
+    cfg.bind_address
+        .parse::<std::net::SocketAddr>()
+        .map_err(|_| {
+            anyhow::anyhow!(
+                "Invalid bind_address: {}. Expected format like 0.0.0.0:8080",
+                cfg.bind_address
+            )
+        })?;
 
     // Validate upstream_url format
     if !cfg.upstream_url.starts_with("http://") && !cfg.upstream_url.starts_with("https://") {
-        anyhow::bail!("Invalid upstream_url: {}. Must start with http:// or https://", cfg.upstream_url);
+        anyhow::bail!(
+            "Invalid upstream_url: {}. Must start with http:// or https://",
+            cfg.upstream_url
+        );
     }
 
     Ok(cfg)
 }
 
-fn all_apis(jwt: JwtSigner, jwt_expiry_secs: usize, upstream_url: &str) -> anyhow::Result<impl Into<Methods>> {
+fn all_apis(
+    jwt: JwtSigner,
+    jwt_expiry_secs: usize,
+    upstream_url: &str,
+) -> anyhow::Result<impl Into<Methods>> {
     let auth_server = SiweAuthRpcImpl::new(jwt, jwt_expiry_secs);
     let proxy_server = EthRpcProxyImpl::new(upstream_url)?;
     let mut methods = auth_server.into_rpc();
@@ -165,10 +178,13 @@ mod tests {
         // Check values
         assert_eq!(cfg.bind_address, "127.0.0.1:12345");
         assert_eq!(cfg.upstream_url, "http://example.com:8545");
-        assert_eq!(cfg.admin_keys, vec![
-            "admin-token-1-abcdefg".to_string(),
-            "admin-token-2-hijklmn".to_string()
-        ]);
+        assert_eq!(
+            cfg.admin_keys,
+            vec![
+                "admin-token-1-abcdefg".to_string(),
+                "admin-token-2-hijklmn".to_string()
+            ]
+        );
         assert_eq!(cfg.jwt_expiry_secs, 3600);
         assert_eq!(cfg.default_kid, "key-2025-07".to_string());
         assert_eq!(cfg.jwt_signer_keys.len(), 2);

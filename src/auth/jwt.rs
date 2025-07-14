@@ -49,10 +49,7 @@ impl JwtSigner {
         }
         // Ensure default_kid exists in the key map
         if !map.contains_key(default_kid) {
-            anyhow::bail!(
-                "default_kid '{}' not found in jwt_signer_keys",
-                default_kid
-            );
+            anyhow::bail!("default_kid '{}' not found in jwt_signer_keys", default_kid);
         }
         Ok(Self {
             keys: Arc::new(map),
@@ -125,12 +122,10 @@ mod tests {
         assert_eq!(claims.address, address());
 
         // Rotate: only key-2025-06 remains
-        let keys_rotated = vec![
-            JwtSignerKeyConfig {
-                kid: "key-2025-06".to_string(),
-                secret: "supersecret2".to_string(),
-            },
-        ];
+        let keys_rotated = vec![JwtSignerKeyConfig {
+            kid: "key-2025-06".to_string(),
+            secret: "supersecret2".to_string(),
+        }];
         let signer_rotated = JwtSigner::from_config(&keys_rotated, "key-2025-06").unwrap();
 
         // Old token can't be decoded (missing key-2025-07)
