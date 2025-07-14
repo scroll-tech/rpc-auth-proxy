@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use alloy::primitives::Address;
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
@@ -29,7 +29,7 @@ pub struct JwtSignerKeyConfig {
 /// The JwtSigner supports multiple keys and signs tokens with the configured default key
 #[derive(Clone)]
 pub struct JwtSigner {
-    keys: Arc<RwLock<HashMap<String, KeyEntry>>>,
+    keys: Arc<HashMap<String, KeyEntry>>,
     default_kid: String, // The key used for signing new tokens
 }
 
@@ -55,15 +55,15 @@ impl JwtSigner {
             );
         }
         Ok(Self {
-            keys: Arc::new(RwLock::new(map)),
+            keys: Arc::new(map),
             default_kid: default_kid.to_owned(),
         })
     }
 
     /// Create a JWT token using the default signing key
     pub fn create_token(&self, addr: impl Into<Address>, exp: usize) -> anyhow::Result<String> {
-        let keys = self.keys.read().unwrap();
-        let entry = keys
+        let entry = self
+            .keys
             .get(&self.default_kid)
             .ok_or_else(|| anyhow::anyhow!("Current signing key not found"))?;
         let mut header = Header::default();
@@ -82,8 +82,8 @@ impl JwtSigner {
         let kid = header
             .kid
             .ok_or_else(|| anyhow::anyhow!("No kid in JWT header"))?;
-        let keys = self.keys.read().unwrap();
-        let entry = keys
+        let entry = self
+            .keys
             .get(&kid)
             .ok_or_else(|| anyhow::anyhow!("JWT signing key kid {} not found", kid))?;
         let token_data = decode(token.as_ref(), &entry.decoding, &Validation::default())?;
