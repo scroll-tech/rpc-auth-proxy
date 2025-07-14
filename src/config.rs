@@ -1,5 +1,4 @@
 use clap::Parser;
-use config;
 
 /// Command line arguments
 #[derive(Parser, Debug)]

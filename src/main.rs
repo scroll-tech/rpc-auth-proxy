@@ -44,7 +44,7 @@ pub async fn run_server() -> anyhow::Result<SocketAddr> {
         .await?;
 
     let addr = server.local_addr()?;
-    println!("Server is listening on {}", addr);
+    println!("Server is listening on {addr}");
     println!("Upstream endpoint is {}", cfg.upstream_url);
 
     // not sure why this is needed, but running in a linux/amd64
