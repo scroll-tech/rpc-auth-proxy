@@ -14,8 +14,11 @@ pub struct AuthenticationMiddleware {
 }
 
 impl AuthenticationMiddleware {
-    pub fn new(jwt: JwtSigner, api_keys: DashSet<String>) -> Self {
-        Self { jwt, api_keys }
+    pub fn new(jwt: JwtSigner, api_keys: impl Iterator<Item = String>) -> Self {
+        Self {
+            jwt,
+            api_keys: DashSet::from_iter(api_keys),
+        }
     }
 
     async fn authenticate_user(&self, headers: &HeaderMap) -> AccessLevel {

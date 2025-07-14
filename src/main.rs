@@ -6,7 +6,6 @@ use std::io::{Write, stdout};
 use std::net::SocketAddr;
 
 use auth::{AuthenticationMiddleware, JwtSigner, SiweAuthRpcImpl, SiweAuthRpcServer};
-use dashmap::DashSet;
 use jsonrpsee::{Methods, server::Server};
 use proxy::{EthRpcProxyImpl, EthRpcProxyServer};
 use tower::ServiceBuilder;
@@ -28,14 +27,8 @@ pub async fn run_server() -> anyhow::Result<SocketAddr> {
     let cfg = config::load_config()?;
     let jwt = JwtSigner::from_config(cfg.jwt_signer_keys.as_slice(), &cfg.default_kid)?;
 
-    // Only load admin_keys from config file
-    let admin_keys = DashSet::default();
-    for key in cfg.admin_keys {
-        admin_keys.insert(key);
-    }
-
     let http_middleware = ServiceBuilder::new().layer(AsyncRequireAuthorizationLayer::new(
-        AuthenticationMiddleware::new(jwt.clone(), admin_keys),
+        AuthenticationMiddleware::new(jwt.clone(), cfg.admin_keys.iter().cloned()),
     ));
 
     let server = Server::builder()
