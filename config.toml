@@ -1,0 +1,26 @@
+# The address for the server to bind to
+bind_address = "0.0.0.0:1234"
+
+# The upstream HTTP endpoint (e.g. for forwarding requests)
+upstream_url = "https://rpc.scroll.io"
+
+# List of admin API tokens. Only users with these tokens can access admin functions.
+admin_keys = [
+  "admin-token-1-abcdefg",
+  "admin-token-2-hijklmn"
+]
+
+# JWT token expiry in seconds
+# Timeout is not exact, there is a 60s leeway by default
+jwt_expiry_secs = 3600
+
+# The key ID used to sign new JWT tokens.
+# This must match the 'kid' of one of the entries in 'jwt_signer_keys'.
+default_kid = "key-2025-07"
+
+# JWT signer keys; to invalidate a key, simply remove its entry.
+# Each key must have a unique 'kid' (key ID).
+jwt_signer_keys = [
+    { kid = "key-2025-07", secret = "supersecret1" },
+    { kid = "key-2025-06", secret = "supersecret2" }
+]

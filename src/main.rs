@@ -1,31 +1,37 @@
 mod auth;
+mod config;
 mod proxy;
 
+use std::net::SocketAddr;
+
+use auth::{AuthenticationMiddleware, JwtSigner, SiweAuthRpcImpl, SiweAuthRpcServer};
 use dashmap::DashSet;
 use jsonrpsee::{Methods, server::Server};
-use std::net::SocketAddr;
+use proxy::{EthRpcProxyImpl, EthRpcProxyServer};
 use tower::ServiceBuilder;
 use tower_http::auth::AsyncRequireAuthorizationLayer;
 
-use auth::{AuthenticationMiddleware, JwtSigner, SiweAuthRpcImpl, SiweAuthRpcServer};
-use proxy::{EthRpcProxyImpl, EthRpcProxyServer};
-
-const LOCAL_ENDPOINT: &str = "127.0.0.1:1234";
-const REMOTE_ENDPOINT: &str = "https://rpc.scroll.io";
-
-fn all_apis(jwt: JwtSigner) -> anyhow::Result<impl Into<Methods>> {
-    let auth_server = SiweAuthRpcImpl::new(jwt);
-    let proxy_server = EthRpcProxyImpl::new(REMOTE_ENDPOINT)?;
+fn all_apis(
+    jwt: JwtSigner,
+    jwt_expiry_secs: usize,
+    upstream_url: &str,
+) -> anyhow::Result<impl Into<Methods>> {
+    let auth_server = SiweAuthRpcImpl::new(jwt, jwt_expiry_secs);
+    let proxy_server = EthRpcProxyImpl::new(upstream_url)?;
     let mut methods = auth_server.into_rpc();
     methods.merge(proxy_server.into_rpc())?;
     Ok(methods)
 }
 
 pub async fn run_server() -> anyhow::Result<SocketAddr> {
-    let jwt = JwtSigner::new();
+    let cfg = config::load_config()?;
+    let jwt = JwtSigner::from_config(cfg.jwt_signer_keys.as_slice(), &cfg.default_kid)?;
 
+    // Only load admin_keys from config file
     let admin_keys = DashSet::default();
-    admin_keys.insert("example_admin_token".to_owned());
+    for key in cfg.admin_keys {
+        admin_keys.insert(key);
+    }
 
     let http_middleware = ServiceBuilder::new().layer(AsyncRequireAuthorizationLayer::new(
         AuthenticationMiddleware::new(jwt.clone(), admin_keys),
@@ -33,20 +39,25 @@ pub async fn run_server() -> anyhow::Result<SocketAddr> {
 
     let server = Server::builder()
         .set_http_middleware(http_middleware)
-        .build(LOCAL_ENDPOINT.parse::<SocketAddr>()?)
+        .build(cfg.bind_address.parse::<SocketAddr>()?)
         .await?;
 
     let addr = server.local_addr()?;
-    println!("Server is listening on {}", addr);
+    eprintln!("Server is listening on {addr}");
+    eprintln!("Upstream endpoint is {}", cfg.upstream_url);
 
-    let handle = server.start(all_apis(jwt)?);
+    let handle = server.start(all_apis(jwt, cfg.jwt_expiry_secs, &cfg.upstream_url)?);
     handle.stopped().await;
     Ok(addr)
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    run_server().await?;
-
-    Ok(())
+    match run_server().await {
+        Ok(_) => Ok(()),
+        Err(err) => {
+            eprintln!("Error starting server: {}", err);
+            std::process::exit(1);
+        }
+    }
 }
