@@ -11,12 +11,12 @@ use proxy::{EthRpcProxyImpl, EthRpcProxyServer};
 use tower::ServiceBuilder;
 use tower_http::auth::AsyncRequireAuthorizationLayer;
 
-fn all_apis(
+async fn all_apis(
     jwt: JwtSigner,
     jwt_expiry_secs: usize,
     upstream_url: &str,
 ) -> anyhow::Result<impl Into<Methods>> {
-    let auth_server = SiweAuthRpcImpl::new(jwt, jwt_expiry_secs);
+    let auth_server = SiweAuthRpcImpl::new(jwt, jwt_expiry_secs, upstream_url).await?;
     let proxy_server = EthRpcProxyImpl::new(upstream_url)?;
     let mut methods = auth_server.into_rpc();
     methods.merge(proxy_server.into_rpc())?;
@@ -46,7 +46,8 @@ pub async fn run_server() -> anyhow::Result<SocketAddr> {
     eprintln!("Server is listening on {addr}");
     eprintln!("Upstream endpoint is {}", cfg.upstream_url);
 
-    let handle = server.start(all_apis(jwt, cfg.jwt_expiry_secs, &cfg.upstream_url)?);
+    let methods = all_apis(jwt, cfg.jwt_expiry_secs, &cfg.upstream_url).await?;
+    let handle = server.start(methods);
     handle.stopped().await;
     Ok(addr)
 }
@@ -56,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
     match run_server().await {
         Ok(_) => Ok(()),
         Err(err) => {
-            eprintln!("Error starting server: {}", err);
+            eprintln!("Error starting server: {err}");
             std::process::exit(1);
         }
     }
