@@ -1,7 +1,9 @@
+use alloy::primitives::TxKind;
 use alloy::primitives::{Address, Bytes, FixedBytes};
 use alloy::providers::{Provider, ProviderBuilder};
 use alloy::sol;
 use alloy::sol_types::SolCall;
+use alloy_rpc_types::TransactionRequest;
 use chrono::Utc;
 use jsonrpsee::core::{RpcResult, async_trait};
 use jsonrpsee::proc_macros::rpc;
@@ -10,8 +12,6 @@ use rand::distr::{Alphanumeric, SampleString};
 use siwe::{Message, VerificationOpts};
 use std::sync::Arc;
 use std::time::Duration;
-use alloy::primitives::TxKind;
-use alloy_rpc_types::TransactionRequest;
 
 use crate::auth::error::{internal_error, invalid_params};
 use crate::auth::jwt::JwtSigner;
@@ -61,7 +61,11 @@ pub struct SiweAuthRpcImpl {
 }
 
 impl SiweAuthRpcImpl {
-    pub async fn new(jwt: JwtSigner, jwt_expiry_secs: usize, remote_rpc_url: &str) -> anyhow::Result<Self> {
+    pub async fn new(
+        jwt: JwtSigner,
+        jwt_expiry_secs: usize,
+        remote_rpc_url: &str,
+    ) -> anyhow::Result<Self> {
         let cache: NonceCache = Arc::new(
             Cache::builder()
                 .time_to_live(Duration::from_secs(300))
@@ -75,9 +79,9 @@ impl SiweAuthRpcImpl {
             .await
             .map_err(|e| anyhow::anyhow!("Failed to create RPC provider: {}", e))?;
 
-        Ok(Self { 
-            cache, 
-            jwt, 
+        Ok(Self {
+            cache,
+            jwt,
             jwt_expiry_secs,
             rpc_provider: Arc::new(rpc_provider),
         })
@@ -146,11 +150,7 @@ impl SiweAuthRpcImpl {
     }
 
     /// Unified signature verification function supporting EOA, Contract, and EIP-7702 accounts
-    async fn verify_signature(
-        &self,
-        message: &Message,
-        signature: &Bytes,
-    ) -> anyhow::Result<bool> {
+    async fn verify_signature(&self, message: &Message, signature: &Bytes) -> anyhow::Result<bool> {
         let address = message.address.into();
         let account_type = self.classify_account(address).await?;
 
@@ -162,13 +162,16 @@ impl SiweAuthRpcImpl {
             AccountType::Contract => {
                 // Contract: use ERC-1271 verification
                 let message_hash = message.eip191_hash()?;
-                self.verify_erc1271_signature(address, message_hash.into(), signature).await
+                self.verify_erc1271_signature(address, message_hash.into(), signature)
+                    .await
             }
             AccountType::Eip7702 => {
                 // EIP-7702: try both verification methods
                 // First try ERC-1271 (delegated code might implement it)
                 let message_hash = message.eip191_hash()?;
-                let erc1271_result = self.verify_erc1271_signature(address, message_hash.into(), signature).await;
+                let erc1271_result = self
+                    .verify_erc1271_signature(address, message_hash.into(), signature)
+                    .await;
 
                 match erc1271_result {
                     Ok(true) => {
@@ -238,14 +241,14 @@ impl SiweAuthRpcServer for SiweAuthRpcImpl {
 
 #[cfg(test)]
 mod tests {
-use super::*;
-    use std::collections::HashMap;
-    use std::sync::Arc;
-    use std::str::FromStr;
-    use moka::future::Cache;
+    use super::*;
     use crate::auth::jwt::{JwtSigner, JwtSignerKeyConfig};
-    use alloy::providers::{Provider, RootProvider, RpcWithBlock};
     use alloy::primitives::{Address, Bytes};
+    use alloy::providers::{Provider, RootProvider, RpcWithBlock};
+    use moka::future::Cache;
+    use std::collections::HashMap;
+    use std::str::FromStr;
+    use std::sync::Arc;
 
     #[derive(Clone)]
     struct MockProvider {
@@ -267,7 +270,8 @@ use super::*;
         }
 
         fn with_contract(mut self, address: Address) -> Self {
-            self.code_responses.insert(address, Bytes::from(vec![0x60, 0x80, 0x60, 0x40]));
+            self.code_responses
+                .insert(address, Bytes::from(vec![0x60, 0x80, 0x60, 0x40]));
             let response = Bytes::from(ERC1271_MAGIC_VALUE.to_vec());
             self.call_responses.insert(address, response);
             self
@@ -277,7 +281,8 @@ use super::*;
             let mut code = vec![0xef, 0x01, 0x00];
             code.extend_from_slice(delegated_address.as_slice());
             self.code_responses.insert(address, Bytes::from(code));
-            self.call_responses.insert(address, Bytes::from(ERC1271_MAGIC_VALUE.to_vec()));
+            self.call_responses
+                .insert(address, Bytes::from(ERC1271_MAGIC_VALUE.to_vec()));
             self
         }
     }
@@ -299,12 +304,10 @@ use super::*;
     }
 
     fn create_jwt_signer() -> JwtSigner {
-        let keys = vec![
-            JwtSignerKeyConfig {
-                kid: "test".to_string(),
-                secret: "test_secret".to_string(),
-            }
-        ];
+        let keys = vec![JwtSignerKeyConfig {
+            kid: "test".to_string(),
+            secret: "test_secret".to_string(),
+        }];
         JwtSigner::from_config(&keys, "test").unwrap()
     }
 
@@ -332,7 +335,8 @@ use super::*;
         let account_type = impl_instance.classify_account(eoa_addr).await.unwrap();
         assert_eq!(account_type, AccountType::Eoa);
 
-        let contract_addr = Address::from_str("0x2222222222222222222222222222222222222222").unwrap();
+        let contract_addr =
+            Address::from_str("0x2222222222222222222222222222222222222222").unwrap();
         let provider = MockProvider::new().with_contract(contract_addr);
         let impl_instance = create_test_impl_with_provider(provider);
 
@@ -340,7 +344,8 @@ use super::*;
         assert_eq!(account_type, AccountType::Contract);
 
         let eip7702_addr = Address::from_str("0x3333333333333333333333333333333333333333").unwrap();
-        let delegated_addr = Address::from_str("0x4444444444444444444444444444444444444444").unwrap();
+        let delegated_addr =
+            Address::from_str("0x4444444444444444444444444444444444444444").unwrap();
         let provider = MockProvider::new().with_eip7702(eip7702_addr, delegated_addr);
         let impl_instance = create_test_impl_with_provider(provider);
 
