@@ -222,7 +222,7 @@ impl SiweAuthRpcServer for SiweAuthRpcImpl {
                 return Err(invalid_params("invalid message or signature"));
             }
             Err(e) => {
-                eprintln!("Signature verification error: {}", e);
+                eprintln!("Signature verification error: {e}");
                 return Err(internal_error("signature verification failed"));
             }
         }
@@ -232,7 +232,7 @@ impl SiweAuthRpcServer for SiweAuthRpcImpl {
         match self.jwt.create_token(message.address, exp) {
             Ok(token) => Ok(token),
             Err(e) => {
-                eprintln!("JWT creation error: {}", e);
+                eprintln!("JWT creation error: {e}");
                 Err(internal_error("unable to issue token"))
             }
         }

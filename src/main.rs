@@ -57,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
     match run_server().await {
         Ok(_) => Ok(()),
         Err(err) => {
-            eprintln!("Error starting server: {}", err);
+            eprintln!("Error starting server: {err}");
             std::process::exit(1);
         }
     }
