@@ -2,7 +2,6 @@ mod auth;
 mod config;
 mod proxy;
 
-use std::io::{Write, stdout};
 use std::net::SocketAddr;
 
 use auth::{AuthenticationMiddleware, JwtSigner, SiweAuthRpcImpl, SiweAuthRpcServer};
@@ -44,12 +43,8 @@ pub async fn run_server() -> anyhow::Result<SocketAddr> {
         .await?;
 
     let addr = server.local_addr()?;
-    println!("Server is listening on {addr}");
-    println!("Upstream endpoint is {}", cfg.upstream_url);
-
-    // not sure why this is needed, but running in a linux/amd64
-    // Docker container without this exits immediately.
-    stdout().flush().unwrap();
+    eprintln!("Server is listening on {addr}");
+    eprintln!("Upstream endpoint is {}", cfg.upstream_url);
 
     let handle = server.start(all_apis(jwt, cfg.jwt_expiry_secs, &cfg.upstream_url)?);
     handle.stopped().await;
@@ -58,6 +53,11 @@ pub async fn run_server() -> anyhow::Result<SocketAddr> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    run_server().await?;
-    Ok(())
+    match run_server().await {
+        Ok(_) => Ok(()),
+        Err(err) => {
+            eprintln!("Error starting server: {}", err);
+            std::process::exit(1);
+        }
+    }
 }
