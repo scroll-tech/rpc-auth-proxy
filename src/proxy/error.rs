@@ -10,6 +10,6 @@ pub fn proxy_call_failed(e: ClientError) -> ErrorObjectOwned {
     ErrorObjectOwned::owned(
         INTERNAL_ERROR_CODE,
         INTERNAL_ERROR_MSG,
-        Some(format!("proxy_call_failed: {}", e)),
+        Some(format!("proxy_call_failed: {e}")),
     )
 }

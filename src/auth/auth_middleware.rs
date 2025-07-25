@@ -53,7 +53,7 @@ impl AsyncAuthorizeRequest<HttpBody> for AuthenticationMiddleware {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use headers::{HeaderValue};
+    use headers::HeaderValue;
     use jsonrpsee::http_client::HeaderMap;
 
     #[tokio::test]

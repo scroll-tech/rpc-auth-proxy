@@ -1,8 +1,8 @@
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use alloy::primitives::Address;
-use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, decode_header, encode};
 use serde::{Deserialize, Serialize};
 
 /// Represents the JWT claims for a user
@@ -19,6 +19,16 @@ struct KeyEntry {
     kid: String,
 }
 
+impl From<&JwtSignerKeyConfig> for KeyEntry {
+    fn from(config: &JwtSignerKeyConfig) -> Self {
+        KeyEntry {
+            encoding: EncodingKey::from_secret(config.secret.as_bytes()),
+            decoding: DecodingKey::from_secret(config.secret.as_bytes()),
+            kid: config.kid.clone(),
+        }
+    }
+}
+
 /// Configuration for a JWT signer key
 #[derive(Debug, Deserialize)]
 pub struct JwtSignerKeyConfig {
@@ -29,63 +39,57 @@ pub struct JwtSignerKeyConfig {
 /// The JwtSigner supports multiple keys and signs tokens with the configured default key
 #[derive(Clone)]
 pub struct JwtSigner {
-    keys: Arc<RwLock<HashMap<String, KeyEntry>>>,
+    keys: Arc<HashMap<String, KeyEntry>>,
     default_kid: String, // The key used for signing new tokens
 }
 
 impl JwtSigner {
     /// Build JwtSigner from key config and a default_kid
     pub fn from_config(keys: &[JwtSignerKeyConfig], default_kid: &str) -> anyhow::Result<Self> {
-        let mut map = HashMap::new();
-        for k in keys {
-            map.insert(
-                k.kid.clone(),
-                KeyEntry {
-                    encoding: EncodingKey::from_secret(k.secret.as_bytes()),
-                    decoding: DecodingKey::from_secret(k.secret.as_bytes()),
-                    kid: k.kid.clone(),
-                },
-            );
-        }
+        let map: HashMap<_, _> = keys.iter().map(|k| (k.kid.clone(), k.into())).collect();
+
         // Ensure default_kid exists in the key map
         if !map.contains_key(default_kid) {
-            anyhow::bail!(
-                "default_kid '{}' not found in jwt_signer_keys",
-                default_kid
-            );
+            anyhow::bail!("default_kid '{}' not found in jwt_signer_keys", default_kid);
         }
+
         Ok(Self {
-            keys: Arc::new(RwLock::new(map)),
+            keys: Arc::new(map),
             default_kid: default_kid.to_owned(),
         })
     }
 
     /// Create a JWT token using the default signing key
     pub fn create_token(&self, addr: impl Into<Address>, exp: usize) -> anyhow::Result<String> {
-        let keys = self.keys.read().unwrap();
-        let entry = keys
+        let entry = self
+            .keys
             .get(&self.default_kid)
             .ok_or_else(|| anyhow::anyhow!("Current signing key not found"))?;
+
+        // Store key ID in the JWT header
         let mut header = Header::default();
         header.kid = Some(entry.kid.clone());
+
         let claims = UserClaims {
             address: addr.into(),
             exp,
         };
+
         let token = encode(&header, &claims, &entry.encoding)?;
         Ok(token)
     }
 
     /// Decode and verify a JWT token using the correct key (looked up by kid)
     pub fn decode_token(&self, token: impl AsRef<str>) -> anyhow::Result<UserClaims> {
-        let header = jsonwebtoken::decode_header(token.as_ref())?;
-        let kid = header
+        let kid = decode_header(token.as_ref())?
             .kid
             .ok_or_else(|| anyhow::anyhow!("No kid in JWT header"))?;
-        let keys = self.keys.read().unwrap();
-        let entry = keys
+
+        let entry = self
+            .keys
             .get(&kid)
             .ok_or_else(|| anyhow::anyhow!("JWT signing key kid {} not found", kid))?;
+
         let token_data = decode(token.as_ref(), &entry.decoding, &Validation::default())?;
         Ok(token_data.claims)
     }
@@ -125,12 +129,10 @@ mod tests {
         assert_eq!(claims.address, address());
 
         // Rotate: only key-2025-06 remains
-        let keys_rotated = vec![
-            JwtSignerKeyConfig {
-                kid: "key-2025-06".to_string(),
-                secret: "supersecret2".to_string(),
-            },
-        ];
+        let keys_rotated = vec![JwtSignerKeyConfig {
+            kid: "key-2025-06".to_string(),
+            secret: "supersecret2".to_string(),
+        }];
         let signer_rotated = JwtSigner::from_config(&keys_rotated, "key-2025-06").unwrap();
 
         // Old token can't be decoded (missing key-2025-07)

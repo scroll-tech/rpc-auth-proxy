@@ -2,6 +2,7 @@ use alloy::primitives::{Address, Bytes, FixedBytes};
 use alloy::providers::{Provider, ProviderBuilder};
 use alloy::sol;
 use alloy::sol_types::SolCall;
+use chrono::Utc;
 use jsonrpsee::core::{RpcResult, async_trait};
 use jsonrpsee::proc_macros::rpc;
 use moka::future::Cache;
@@ -10,7 +11,6 @@ use siwe::{Message, VerificationOpts};
 use std::sync::Arc;
 use std::time::Duration;
 use alloy::primitives::TxKind;
-use chrono::Utc;
 use alloy_rpc_types::TransactionRequest;
 
 use crate::auth::error::{internal_error, invalid_params};
