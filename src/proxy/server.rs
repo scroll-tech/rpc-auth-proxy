@@ -3,7 +3,8 @@ use alloy::primitives::{Address, B256, Bytes, U64, U256};
 use alloy::rpc::types::BlockId;
 use alloy_rlp::Decodable;
 use alloy_rpc_types::{
-    Block, BlockNumberOrTag, FeeHistory, Header, Receipt, Transaction, TransactionTrait,
+    Block, BlockNumberOrTag, FeeHistory, Header, Receipt, Transaction, TransactionRequest,
+    TransactionTrait,
 };
 use hyper::http::Extensions;
 use jsonrpsee::core::{RpcResult, async_trait};
@@ -17,7 +18,7 @@ use crate::auth::AccessLevel;
 
 macro_rules! proxy_call {
     ($client:expr, $method:ident $(, $arg:expr )* ) => {
-        EthApiClient::<Transaction, Block, Receipt, Header>::$method(&$client $(, $arg )*).await.map_err(|e| proxy_call_failed(e))
+        EthApiClient::<TransactionRequest, Transaction, Block, Receipt, Header>::$method(&$client $(, $arg )*).await.map_err(|e| proxy_call_failed(e))
     };
 }
 
