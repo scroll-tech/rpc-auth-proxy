@@ -124,6 +124,16 @@ impl EthRpcProxyServer for EthRpcProxyImpl {
         proxy_call!(self.client, get_code, address, block_number)
     }
 
+    async fn call(
+        &self,
+        ext: &Extensions,
+        request: TransactionRequest,
+        block_number: Option<BlockId>,
+    ) -> RpcResult<Bytes> {
+        only_full_access(ext)?;
+        proxy_call!(self.client, call, request, block_number, None, None)
+    }
+
     async fn gas_price(&self, _ext: &Extensions) -> RpcResult<U256> {
         proxy_call!(self.client, gas_price)
     }

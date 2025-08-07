@@ -2,8 +2,7 @@ use jsonrpsee::proc_macros::rpc;
 
 use alloy::primitives::{Address, B256, Bytes, U64, U256};
 use alloy::rpc::types::BlockId;
-
-use alloy_rpc_types::{BlockNumberOrTag, FeeHistory, Transaction};
+use alloy_rpc_types::{BlockNumberOrTag, FeeHistory, Transaction, TransactionRequest};
 use jsonrpsee::core::RpcResult;
 
 // see https://github.com/paradigmxyz/reth/blob/main/crates/rpc/rpc-eth-api/src/core.rs
@@ -30,6 +29,13 @@ pub trait EthRpcProxy {
 
     #[method(name = "getCode", with_extensions)]
     async fn get_code(&self, address: Address, block_number: Option<BlockId>) -> RpcResult<Bytes>;
+
+    #[method(name = "call", with_extensions)]
+    async fn call(
+        &self,
+        request: TransactionRequest,
+        block_number: Option<BlockId>,
+    ) -> RpcResult<Bytes>;
 
     #[method(name = "gasPrice", with_extensions)]
     async fn gas_price(&self) -> RpcResult<U256>;
