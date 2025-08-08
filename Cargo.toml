@@ -3,6 +3,10 @@ name = "rpc-auth-proxy"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "rpc-auth-proxy"
+path = "src/main.rs"
+
 [dependencies]
 alloy = "1.0"
 alloy-network-primitives = "1.0"
