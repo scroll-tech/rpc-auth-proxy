@@ -2,7 +2,8 @@ use jsonrpsee::proc_macros::rpc;
 
 use alloy::primitives::{Address, B256, Bytes, U64, U256};
 use alloy::rpc::types::BlockId;
-use alloy_rpc_types::{BlockNumberOrTag, FeeHistory, Transaction, TransactionRequest};
+use alloy_rpc_types::{BlockNumberOrTag, FeeHistory, TransactionRequest};
+use scroll_alloy_rpc_types::{Transaction, ScrollTransactionReceipt as Receipt};
 use jsonrpsee::core::RpcResult;
 
 // see https://github.com/paradigmxyz/reth/blob/main/crates/rpc/rpc-eth-api/src/core.rs
@@ -16,6 +17,9 @@ pub trait EthRpcProxy {
 
     #[method(name = "getTransactionByHash", with_extensions)]
     async fn transaction_by_hash(&self, hash: B256) -> RpcResult<Option<Transaction>>;
+
+    #[method(name = "getTransactionReceipt", with_extensions)]
+    async fn transaction_receipt(&self, hash: B256) -> RpcResult<Option<Receipt>>;
 
     #[method(name = "getBalance", with_extensions)]
     async fn balance(&self, address: Address, block_number: Option<BlockId>) -> RpcResult<U256>;
@@ -36,6 +40,13 @@ pub trait EthRpcProxy {
         request: TransactionRequest,
         block_number: Option<BlockId>,
     ) -> RpcResult<Bytes>;
+
+    #[method(name = "estimateGas", with_extensions)]
+    async fn estimate_gas(
+        &self,
+        request: TransactionRequest,
+        block_number: Option<BlockId>,
+    ) -> RpcResult<U256>;
 
     #[method(name = "gasPrice", with_extensions)]
     async fn gas_price(&self) -> RpcResult<U256>;

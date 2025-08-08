@@ -3,9 +3,10 @@ use alloy::primitives::{Address, B256, Bytes, U64, U256};
 use alloy::rpc::types::BlockId;
 use alloy_rlp::Decodable;
 use alloy_rpc_types::{
-    Block, BlockNumberOrTag, FeeHistory, Header, Receipt, Transaction, TransactionRequest,
+    Block, BlockNumberOrTag, FeeHistory, Header, TransactionRequest,
     TransactionTrait,
 };
+use scroll_alloy_rpc_types::{Transaction, ScrollTransactionReceipt as Receipt};
 use hyper::http::Extensions;
 use jsonrpsee::core::{RpcResult, async_trait};
 use jsonrpsee::http_client::HttpClient;
@@ -104,6 +105,39 @@ impl EthRpcProxyServer for EthRpcProxyImpl {
         Err(unauthorized())
     }
 
+    async fn transaction_receipt(
+        &self,
+        ext: &Extensions,
+        hash: B256,
+    ) -> RpcResult<Option<Receipt>> {
+        let access = get_access(ext);
+
+        // pre-check before proxy call
+        if access == &AccessLevel::None {
+            return Err(unauthorized());
+        }
+
+        // proxy call
+        let maybe_receipt = proxy_call!(self.client, transaction_receipt, hash)?;
+
+        let receipt = match maybe_receipt {
+            None => return Ok(None),
+            Some(receipt) => receipt,
+        };
+
+        // allow receiver to query transaction
+        if access.is_authorized(&receipt.to().unwrap_or_default()) {
+            return Ok(Some(receipt));
+        }
+
+        // allow sender to query transaction
+        if access.is_authorized(&receipt.as_recovered().signer()) {
+            return Ok(Some(receipt));
+        }
+
+        Err(unauthorized())
+    }
+
     async fn transaction_count(
         &self,
         ext: &Extensions,
@@ -132,6 +166,16 @@ impl EthRpcProxyServer for EthRpcProxyImpl {
     ) -> RpcResult<Bytes> {
         only_full_access(ext)?;
         proxy_call!(self.client, call, request, block_number, None, None)
+    }
+
+    async fn estimate_gas(
+        &self,
+        ext: &Extensions,
+        request: TransactionRequest,
+        block_number: Option<BlockId>,
+    ) -> RpcResult<U256> {
+        only_full_access(ext)?;
+        proxy_call!(self.client, estimate_gas, request, block_number, None)
     }
 
     async fn gas_price(&self, _ext: &Extensions) -> RpcResult<U256> {

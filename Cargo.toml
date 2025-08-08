@@ -21,6 +21,7 @@ moka = { version = "0.12", features = ["future"] }
 rand = "0.9"
 reth-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.6.0" }
 reth-rpc-api = { git = "https://github.com/paradigmxyz/reth", tag = "v1.6.0", features = ["client"] }
+scroll-alloy-rpc-types = { git = "https://github.com/scroll-tech/reth", rev = "e204180ce8a2989248a1fe564b30ce62b28d2944" }
 serde = { version = "1.0", features = ["derive"] }
 siwe = "0.6"
 tokio = { version = "1.47", features = ["macros"] }
