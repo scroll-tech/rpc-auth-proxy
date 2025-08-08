@@ -3,8 +3,8 @@ use jsonrpsee::proc_macros::rpc;
 use alloy::primitives::{Address, B256, Bytes, U64, U256};
 use alloy::rpc::types::BlockId;
 use alloy_rpc_types::{BlockNumberOrTag, FeeHistory, TransactionRequest};
-use scroll_alloy_rpc_types::{Transaction, ScrollTransactionReceipt as Receipt};
 use jsonrpsee::core::RpcResult;
+use scroll_alloy_rpc_types::{ScrollTransactionReceipt as Receipt, Transaction};
 
 // see https://github.com/paradigmxyz/reth/blob/main/crates/rpc/rpc-eth-api/src/core.rs
 #[rpc(server, client, namespace = "eth")]

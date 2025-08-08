@@ -6918,6 +6918,7 @@ name = "rpc-auth-proxy"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "alloy-network-primitives",
  "alloy-rlp",
  "alloy-rpc-types",
  "anyhow",

@@ -1,17 +1,17 @@
 use alloy::consensus::transaction::{PooledTransaction, SignerRecoverable};
 use alloy::primitives::{Address, B256, Bytes, U64, U256};
 use alloy::rpc::types::BlockId;
+use alloy_network_primitives::ReceiptResponse;
 use alloy_rlp::Decodable;
 use alloy_rpc_types::{
-    Block, BlockNumberOrTag, FeeHistory, Header, TransactionRequest,
-    TransactionTrait,
+    Block, BlockNumberOrTag, FeeHistory, Header, TransactionRequest, TransactionTrait,
 };
-use scroll_alloy_rpc_types::{Transaction, ScrollTransactionReceipt as Receipt};
 use hyper::http::Extensions;
 use jsonrpsee::core::{RpcResult, async_trait};
 use jsonrpsee::http_client::HttpClient;
 use reth_primitives::TransactionSigned;
 use reth_rpc_api::EthApiClient;
+use scroll_alloy_rpc_types::{ScrollTransactionReceipt as Receipt, Transaction};
 
 use super::error::{proxy_call_failed, unauthorized};
 use super::interface::EthRpcProxyServer;
@@ -131,7 +131,7 @@ impl EthRpcProxyServer for EthRpcProxyImpl {
         }
 
         // allow sender to query transaction
-        if access.is_authorized(&receipt.as_recovered().signer()) {
+        if access.is_authorized(&receipt.from()) {
             return Ok(Some(receipt));
         }
 

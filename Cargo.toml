@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 alloy = "1.0"
+alloy-network-primitives = "1.0"
 alloy-rlp = "0.3"
 alloy-rpc-types = "1.0"
 anyhow = "1.0"
