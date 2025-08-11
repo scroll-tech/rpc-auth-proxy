@@ -2,7 +2,7 @@ use jsonrpsee::proc_macros::rpc;
 
 use alloy::primitives::{Address, B256, Bytes, U64, U256};
 use alloy::rpc::types::BlockId;
-use alloy_rpc_types::{BlockNumberOrTag, FeeHistory, TransactionRequest};
+use alloy_rpc_types::{BlockNumberOrTag, FeeHistory, Filter, Log, TransactionRequest};
 use jsonrpsee::core::RpcResult;
 use scroll_alloy_rpc_types::{ScrollTransactionReceipt as Receipt, Transaction};
 
@@ -64,4 +64,7 @@ pub trait EthRpcProxy {
 
     #[method(name = "sendRawTransaction", with_extensions)]
     async fn send_raw_transaction(&self, bytes: Bytes) -> RpcResult<B256>;
+
+    #[method(name = "getLogs", with_extensions)]
+    async fn logs(&self, filter: Filter) -> RpcResult<Vec<Log>>;
 }
