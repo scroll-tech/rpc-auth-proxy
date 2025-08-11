@@ -4,13 +4,13 @@ use alloy::rpc::types::BlockId;
 use alloy_network_primitives::ReceiptResponse;
 use alloy_rlp::Decodable;
 use alloy_rpc_types::{
-    Block, BlockNumberOrTag, FeeHistory, Header, TransactionRequest, TransactionTrait,
+    Block, BlockNumberOrTag, FeeHistory, Filter, Header, Log, TransactionRequest, TransactionTrait,
 };
 use hyper::http::Extensions;
 use jsonrpsee::core::{RpcResult, async_trait};
 use jsonrpsee::http_client::HttpClient;
 use reth_primitives::TransactionSigned;
-use reth_rpc_api::EthApiClient;
+use reth_rpc_api::{EthApiClient, EthFilterApiClient};
 use scroll_alloy_rpc_types::{ScrollTransactionReceipt as Receipt, Transaction};
 
 use super::error::{proxy_call_failed, unauthorized};
@@ -20,6 +20,12 @@ use crate::auth::AccessLevel;
 macro_rules! proxy_call {
     ($client:expr, $method:ident $(, $arg:expr )* ) => {
         EthApiClient::<TransactionRequest, Transaction, Block, Receipt, Header>::$method(&$client $(, $arg )*).await.map_err(|e| proxy_call_failed(e))
+    };
+}
+
+macro_rules! proxy_filter_call {
+    ($client:expr, $method:ident $(, $arg:expr )* ) => {
+        EthFilterApiClient::<()>::$method(&$client $(, $arg )*).await.map_err(|e| proxy_call_failed(e))
     };
 }
 
@@ -234,5 +240,10 @@ impl EthRpcProxyServer for EthRpcProxyImpl {
         }
 
         proxy_call!(self.client, send_raw_transaction, bytes)
+    }
+
+    async fn logs(&self, ext: &Extensions, filter: Filter) -> RpcResult<Vec<Log>> {
+        only_full_access(ext)?;
+        proxy_filter_call!(self.client, logs, filter)
     }
 }
