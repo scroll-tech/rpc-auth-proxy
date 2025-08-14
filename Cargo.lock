@@ -6928,6 +6928,7 @@ dependencies = [
  "dashmap",
  "futures-util",
  "headers",
+ "http",
  "hyper",
  "jsonrpsee",
  "jsonwebtoken",
@@ -6941,6 +6942,8 @@ dependencies = [
  "tokio",
  "tower",
  "tower-http",
+ "tracing",
+ "tracing-subscriber 0.3.19",
 ]
 
 [[package]]
@@ -8126,6 +8129,8 @@ dependencies = [
  "tower",
  "tower-layer",
  "tower-service",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
