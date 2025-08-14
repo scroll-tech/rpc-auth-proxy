@@ -1,15 +1,26 @@
 mod auth;
 mod config;
 mod proxy;
+mod service;
 
-use std::net::SocketAddr;
+#[macro_use]
+extern crate tracing;
 
 use auth::{AuthenticationMiddleware, JwtSigner, SiweAuthRpcImpl, SiweAuthRpcServer};
 use dashmap::DashSet;
+use jsonrpsee::core::middleware::RpcServiceBuilder;
 use jsonrpsee::{Methods, server::Server};
 use proxy::{EthRpcProxyImpl, EthRpcProxyServer};
+use std::iter::once;
+use std::net::SocketAddr;
 use tower::ServiceBuilder;
 use tower_http::auth::AsyncRequireAuthorizationLayer;
+use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
+use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
+use tower_http::trace::TraceLayer;
+use tracing_subscriber::EnvFilter;
+
+use service::{RpcLoggerMiddleware, log_request};
 
 fn all_apis(
     jwt: JwtSigner,
@@ -32,19 +43,30 @@ pub async fn run_server() -> anyhow::Result<SocketAddr> {
     for key in cfg.admin_keys {
         admin_keys.insert(key);
     }
+    debug!("Loaded {} admin keys", admin_keys.len());
 
-    let http_middleware = ServiceBuilder::new().layer(AsyncRequireAuthorizationLayer::new(
-        AuthenticationMiddleware::new(jwt.clone(), admin_keys),
-    ));
+    let http_middleware = ServiceBuilder::new()
+        .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
+        .layer(PropagateRequestIdLayer::x_request_id())
+        .layer(SetSensitiveRequestHeadersLayer::new(once(
+            hyper::header::AUTHORIZATION,
+        )))
+        .layer(TraceLayer::new_for_http().make_span_with(log_request))
+        .layer(AsyncRequireAuthorizationLayer::new(
+            AuthenticationMiddleware::new(jwt.clone(), admin_keys),
+        ));
+
+    let rpc_middleware = RpcServiceBuilder::new().layer_fn(RpcLoggerMiddleware::new);
 
     let server = Server::builder()
         .set_http_middleware(http_middleware)
+        .set_rpc_middleware(rpc_middleware)
         .build(cfg.bind_address.parse::<SocketAddr>()?)
         .await?;
 
     let addr = server.local_addr()?;
-    eprintln!("Server is listening on {addr}");
-    eprintln!("Upstream endpoint is {}", cfg.upstream_url);
+    info!("Server is listening on {addr}");
+    info!("Upstream endpoint is {}", cfg.upstream_url);
 
     let handle = server.start(all_apis(jwt, cfg.jwt_expiry_secs, &cfg.upstream_url)?);
     handle.stopped().await;
@@ -53,10 +75,14 @@ pub async fn run_server() -> anyhow::Result<SocketAddr> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+
     match run_server().await {
         Ok(_) => Ok(()),
         Err(err) => {
-            eprintln!("Error starting server: {}", err);
+            error!("Error starting server: {}", err);
             std::process::exit(1);
         }
     }
