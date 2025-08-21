@@ -1,6 +1,7 @@
 use alloy::consensus::transaction::{PooledTransaction, SignerRecoverable};
 use alloy::primitives::{Address, B256, Bytes, U64, U256};
 use alloy::rpc::types::BlockId;
+use alloy::serde::JsonStorageKey;
 use alloy_network_primitives::ReceiptResponse;
 use alloy_rlp::Decodable;
 use alloy_rpc_types::{
@@ -68,6 +69,26 @@ impl EthRpcProxyServer for EthRpcProxyImpl {
         proxy_call!(self.client, chain_id)
     }
 
+    async fn block_by_hash(
+        &self,
+        ext: &Extensions,
+        hash: B256,
+        full: bool,
+    ) -> RpcResult<Option<Block>> {
+        only_full_access(ext)?;
+        proxy_call!(self.client, block_by_hash, hash, full)
+    }
+
+    async fn block_by_number(
+        &self,
+        ext: &Extensions,
+        number: BlockNumberOrTag,
+        full: bool,
+    ) -> RpcResult<Option<Block>> {
+        only_full_access(ext)?;
+        proxy_call!(self.client, block_by_number, number, full)
+    }
+
     async fn balance(
         &self,
         ext: &Extensions,
@@ -76,6 +97,17 @@ impl EthRpcProxyServer for EthRpcProxyImpl {
     ) -> RpcResult<U256> {
         only_authorized(ext, &address)?;
         proxy_call!(self.client, balance, address, block_number)
+    }
+
+    async fn storage_at(
+        &self,
+        ext: &Extensions,
+        address: Address,
+        index: JsonStorageKey,
+        block_number: Option<BlockId>,
+    ) -> RpcResult<B256> {
+        only_full_access(ext)?;
+        proxy_call!(self.client, storage_at, address, index, block_number)
     }
 
     async fn transaction_by_hash(

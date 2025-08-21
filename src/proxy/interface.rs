@@ -2,7 +2,8 @@ use jsonrpsee::proc_macros::rpc;
 
 use alloy::primitives::{Address, B256, Bytes, U64, U256};
 use alloy::rpc::types::BlockId;
-use alloy_rpc_types::{BlockNumberOrTag, FeeHistory, Filter, Log, TransactionRequest};
+use alloy::serde::JsonStorageKey;
+use alloy_rpc_types::{Block, BlockNumberOrTag, FeeHistory, Filter, Log, TransactionRequest};
 use jsonrpsee::core::RpcResult;
 use scroll_alloy_rpc_types::{ScrollTransactionReceipt as Receipt, Transaction};
 
@@ -15,6 +16,16 @@ pub trait EthRpcProxy {
     #[method(name = "chainId", with_extensions)]
     async fn chain_id(&self) -> RpcResult<Option<U64>>;
 
+    #[method(name = "getBlockByHash", with_extensions)]
+    async fn block_by_hash(&self, hash: B256, full: bool) -> RpcResult<Option<Block>>;
+
+    #[method(name = "getBlockByNumber", with_extensions)]
+    async fn block_by_number(
+        &self,
+        number: BlockNumberOrTag,
+        full: bool,
+    ) -> RpcResult<Option<Block>>;
+
     #[method(name = "getTransactionByHash", with_extensions)]
     async fn transaction_by_hash(&self, hash: B256) -> RpcResult<Option<Transaction>>;
 
@@ -23,6 +34,14 @@ pub trait EthRpcProxy {
 
     #[method(name = "getBalance", with_extensions)]
     async fn balance(&self, address: Address, block_number: Option<BlockId>) -> RpcResult<U256>;
+
+    #[method(name = "getStorageAt", with_extensions)]
+    async fn storage_at(
+        &self,
+        address: Address,
+        index: JsonStorageKey,
+        block_number: Option<BlockId>,
+    ) -> RpcResult<B256>;
 
     #[method(name = "getTransactionCount", with_extensions)]
     async fn transaction_count(
