@@ -5,7 +5,7 @@ use alloy::serde::JsonStorageKey;
 use alloy_network_primitives::ReceiptResponse;
 use alloy_rlp::Decodable;
 use alloy_rpc_types::{
-    Block, BlockNumberOrTag, FeeHistory, Filter, Header, Log, TransactionRequest, TransactionTrait,
+    BlockNumberOrTag, FeeHistory, Filter, Header, Log, TransactionRequest, TransactionTrait,
 };
 use hyper::http::Extensions;
 use jsonrpsee::core::{RpcResult, async_trait};
@@ -15,7 +15,7 @@ use reth_rpc_api::{EthApiClient, EthFilterApiClient};
 use scroll_alloy_rpc_types::{ScrollTransactionReceipt as Receipt, Transaction};
 
 use super::error::{proxy_call_failed, unauthorized};
-use super::interface::EthRpcProxyServer;
+use super::interface::{Block, EthRpcProxyServer, ScrollRpcProxyClient, ScrollRpcProxyServer};
 use crate::auth::AccessLevel;
 
 macro_rules! proxy_call {
@@ -26,7 +26,7 @@ macro_rules! proxy_call {
 
 macro_rules! proxy_filter_call {
     ($client:expr, $method:ident $(, $arg:expr )* ) => {
-        EthFilterApiClient::<()>::$method(&$client $(, $arg )*).await.map_err(|e| proxy_call_failed(e))
+        EthFilterApiClient::<()>::$method(&$client $(, $arg )*).await.map_err(proxy_call_failed)
     };
 }
 
@@ -48,11 +48,11 @@ fn only_full_access(ext: &Extensions) -> RpcResult<()> {
     Ok(())
 }
 
-pub struct EthRpcProxyImpl {
+pub struct RpcProxyImpl {
     client: HttpClient,
 }
 
-impl EthRpcProxyImpl {
+impl RpcProxyImpl {
     pub fn new(target: impl AsRef<str>) -> anyhow::Result<Self> {
         let client = HttpClient::builder().build(target)?;
         Ok(Self { client })
@@ -60,7 +60,22 @@ impl EthRpcProxyImpl {
 }
 
 #[async_trait]
-impl EthRpcProxyServer for EthRpcProxyImpl {
+impl ScrollRpcProxyServer for RpcProxyImpl {
+    async fn l1_messages_in_block(
+        &self,
+        ext: &Extensions,
+        block_id: String,
+        mode: String,
+    ) -> RpcResult<Option<Vec<Transaction>>> {
+        only_full_access(ext)?;
+        ScrollRpcProxyClient::l1_messages_in_block(&self.client, block_id, mode)
+            .await
+            .map_err(proxy_call_failed)
+    }
+}
+
+#[async_trait]
+impl EthRpcProxyServer for RpcProxyImpl {
     async fn block_number(&self, _ext: &Extensions) -> RpcResult<U256> {
         proxy_call!(self.client, block_number)
     }

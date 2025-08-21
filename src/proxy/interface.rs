@@ -3,9 +3,23 @@ use jsonrpsee::proc_macros::rpc;
 use alloy::primitives::{Address, B256, Bytes, U64, U256};
 use alloy::rpc::types::BlockId;
 use alloy::serde::JsonStorageKey;
-use alloy_rpc_types::{Block, BlockNumberOrTag, FeeHistory, Filter, Log, TransactionRequest};
+use alloy_rpc_types::{
+    Block as EthBlock, BlockNumberOrTag, FeeHistory, Filter, Log, TransactionRequest,
+};
 use jsonrpsee::core::RpcResult;
 use scroll_alloy_rpc_types::{ScrollTransactionReceipt as Receipt, Transaction};
+
+pub type Block = EthBlock<Transaction>;
+
+#[rpc(server, client, namespace = "scroll")]
+pub trait ScrollRpcProxy {
+    #[method(name = "getL1MessagesInBlock", with_extensions)]
+    async fn l1_messages_in_block(
+        &self,
+        block_id: String,
+        mode: String,
+    ) -> RpcResult<Option<Vec<Transaction>>>;
+}
 
 // see https://github.com/paradigmxyz/reth/blob/main/crates/rpc/rpc-eth-api/src/core.rs
 #[rpc(server, client, namespace = "eth")]
