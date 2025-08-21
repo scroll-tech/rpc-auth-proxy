@@ -9,8 +9,8 @@ extern crate tracing;
 use auth::{AuthenticationMiddleware, JwtSigner, SiweAuthRpcImpl, SiweAuthRpcServer};
 use dashmap::DashSet;
 use jsonrpsee::core::middleware::RpcServiceBuilder;
-use jsonrpsee::{Methods, server::Server};
-use proxy::{EthRpcProxyImpl, EthRpcProxyServer};
+use jsonrpsee::{Methods, RpcModule, server::Server};
+use proxy::{EthRpcProxyServer, RpcProxyImpl, ScrollRpcProxyServer};
 use std::iter::once;
 use std::net::SocketAddr;
 use tower::ServiceBuilder;
@@ -28,10 +28,14 @@ fn all_apis(
     upstream_url: &str,
 ) -> anyhow::Result<impl Into<Methods>> {
     let auth_server = SiweAuthRpcImpl::new(jwt, jwt_expiry_secs);
-    let proxy_server = EthRpcProxyImpl::new(upstream_url)?;
-    let mut methods = auth_server.into_rpc();
-    methods.merge(proxy_server.into_rpc())?;
-    Ok(methods)
+    let eth_proxy_server = RpcProxyImpl::new(upstream_url)?;
+    let scroll_proxy_server = RpcProxyImpl::new(upstream_url)?;
+
+    let mut module = RpcModule::new(());
+    module.merge(SiweAuthRpcServer::into_rpc(auth_server))?;
+    module.merge(EthRpcProxyServer::into_rpc(eth_proxy_server))?;
+    module.merge(ScrollRpcProxyServer::into_rpc(scroll_proxy_server))?;
+    Ok(module)
 }
 
 pub async fn run_server() -> anyhow::Result<SocketAddr> {
