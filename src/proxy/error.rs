@@ -7,9 +7,12 @@ pub fn unauthorized() -> ErrorObjectOwned {
 }
 
 pub fn proxy_call_failed(e: ClientError) -> ErrorObjectOwned {
-    ErrorObjectOwned::owned(
-        INTERNAL_ERROR_CODE,
-        INTERNAL_ERROR_MSG,
-        Some(format!("proxy_call_failed: {e}")),
-    )
+    match e {
+        jsonrpsee::core::ClientError::Call(e) => e,
+        _ => ErrorObjectOwned::owned(
+            INTERNAL_ERROR_CODE,
+            INTERNAL_ERROR_MSG,
+            Some(format!("proxy_call_failed: {e}")),
+        ),
+    }
 }

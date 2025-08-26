@@ -1,23 +1,32 @@
 use alloy::consensus::transaction::{PooledTransaction, SignerRecoverable};
 use alloy::primitives::{Address, B256, Bytes, U64, U256};
 use alloy::rpc::types::BlockId;
+use alloy::serde::JsonStorageKey;
+use alloy_network_primitives::ReceiptResponse;
 use alloy_rlp::Decodable;
 use alloy_rpc_types::{
-    Block, BlockNumberOrTag, FeeHistory, Header, Receipt, Transaction, TransactionTrait,
+    BlockNumberOrTag, FeeHistory, Filter, Header, Log, TransactionRequest, TransactionTrait,
 };
 use hyper::http::Extensions;
 use jsonrpsee::core::{RpcResult, async_trait};
 use jsonrpsee::http_client::HttpClient;
 use reth_primitives::TransactionSigned;
-use reth_rpc_api::EthApiClient;
+use reth_rpc_api::{EthApiClient, EthFilterApiClient};
+use scroll_alloy_rpc_types::{ScrollTransactionReceipt as Receipt, Transaction};
 
 use super::error::{proxy_call_failed, unauthorized};
-use super::interface::EthRpcProxyServer;
+use super::interface::{Block, EthRpcProxyServer, ScrollRpcProxyClient, ScrollRpcProxyServer};
 use crate::auth::AccessLevel;
 
 macro_rules! proxy_call {
     ($client:expr, $method:ident $(, $arg:expr )* ) => {
-        EthApiClient::<Transaction, Block, Receipt, Header>::$method(&$client $(, $arg )*).await.map_err(|e| proxy_call_failed(e))
+        EthApiClient::<TransactionRequest, Transaction, Block, Receipt, Header>::$method(&$client $(, $arg )*).await.map_err(|e| proxy_call_failed(e))
+    };
+}
+
+macro_rules! proxy_filter_call {
+    ($client:expr, $method:ident $(, $arg:expr )* ) => {
+        EthFilterApiClient::<()>::$method(&$client $(, $arg )*).await.map_err(proxy_call_failed)
     };
 }
 
@@ -39,11 +48,11 @@ fn only_full_access(ext: &Extensions) -> RpcResult<()> {
     Ok(())
 }
 
-pub struct EthRpcProxyImpl {
+pub struct RpcProxyImpl {
     client: HttpClient,
 }
 
-impl EthRpcProxyImpl {
+impl RpcProxyImpl {
     pub fn new(target: impl AsRef<str>) -> anyhow::Result<Self> {
         let client = HttpClient::builder().build(target)?;
         Ok(Self { client })
@@ -51,13 +60,48 @@ impl EthRpcProxyImpl {
 }
 
 #[async_trait]
-impl EthRpcProxyServer for EthRpcProxyImpl {
+impl ScrollRpcProxyServer for RpcProxyImpl {
+    async fn l1_messages_in_block(
+        &self,
+        ext: &Extensions,
+        block_id: String,
+        mode: String,
+    ) -> RpcResult<Option<Vec<Transaction>>> {
+        only_full_access(ext)?;
+        ScrollRpcProxyClient::l1_messages_in_block(&self.client, block_id, mode)
+            .await
+            .map_err(proxy_call_failed)
+    }
+}
+
+#[async_trait]
+impl EthRpcProxyServer for RpcProxyImpl {
     async fn block_number(&self, _ext: &Extensions) -> RpcResult<U256> {
         proxy_call!(self.client, block_number)
     }
 
     async fn chain_id(&self, _ext: &Extensions) -> RpcResult<Option<U64>> {
         proxy_call!(self.client, chain_id)
+    }
+
+    async fn block_by_hash(
+        &self,
+        ext: &Extensions,
+        hash: B256,
+        full: bool,
+    ) -> RpcResult<Option<Block>> {
+        only_full_access(ext)?;
+        proxy_call!(self.client, block_by_hash, hash, full)
+    }
+
+    async fn block_by_number(
+        &self,
+        ext: &Extensions,
+        number: BlockNumberOrTag,
+        full: bool,
+    ) -> RpcResult<Option<Block>> {
+        only_full_access(ext)?;
+        proxy_call!(self.client, block_by_number, number, full)
     }
 
     async fn balance(
@@ -68,6 +112,17 @@ impl EthRpcProxyServer for EthRpcProxyImpl {
     ) -> RpcResult<U256> {
         only_authorized(ext, &address)?;
         proxy_call!(self.client, balance, address, block_number)
+    }
+
+    async fn storage_at(
+        &self,
+        ext: &Extensions,
+        address: Address,
+        index: JsonStorageKey,
+        block_number: Option<BlockId>,
+    ) -> RpcResult<B256> {
+        only_full_access(ext)?;
+        proxy_call!(self.client, storage_at, address, index, block_number)
     }
 
     async fn transaction_by_hash(
@@ -103,6 +158,39 @@ impl EthRpcProxyServer for EthRpcProxyImpl {
         Err(unauthorized())
     }
 
+    async fn transaction_receipt(
+        &self,
+        ext: &Extensions,
+        hash: B256,
+    ) -> RpcResult<Option<Receipt>> {
+        let access = get_access(ext);
+
+        // pre-check before proxy call
+        if access == &AccessLevel::None {
+            return Err(unauthorized());
+        }
+
+        // proxy call
+        let maybe_receipt = proxy_call!(self.client, transaction_receipt, hash)?;
+
+        let receipt = match maybe_receipt {
+            None => return Ok(None),
+            Some(receipt) => receipt,
+        };
+
+        // allow receiver to query transaction
+        if access.is_authorized(&receipt.to().unwrap_or_default()) {
+            return Ok(Some(receipt));
+        }
+
+        // allow sender to query transaction
+        if access.is_authorized(&receipt.from()) {
+            return Ok(Some(receipt));
+        }
+
+        Err(unauthorized())
+    }
+
     async fn transaction_count(
         &self,
         ext: &Extensions,
@@ -121,6 +209,26 @@ impl EthRpcProxyServer for EthRpcProxyImpl {
     ) -> RpcResult<Bytes> {
         only_full_access(ext)?;
         proxy_call!(self.client, get_code, address, block_number)
+    }
+
+    async fn call(
+        &self,
+        ext: &Extensions,
+        request: TransactionRequest,
+        block_number: Option<BlockId>,
+    ) -> RpcResult<Bytes> {
+        only_full_access(ext)?;
+        proxy_call!(self.client, call, request, block_number, None, None)
+    }
+
+    async fn estimate_gas(
+        &self,
+        ext: &Extensions,
+        request: TransactionRequest,
+        block_number: Option<BlockId>,
+    ) -> RpcResult<U256> {
+        only_full_access(ext)?;
+        proxy_call!(self.client, estimate_gas, request, block_number, None)
     }
 
     async fn gas_price(&self, _ext: &Extensions) -> RpcResult<U256> {
@@ -179,5 +287,10 @@ impl EthRpcProxyServer for EthRpcProxyImpl {
         }
 
         proxy_call!(self.client, send_raw_transaction, bytes)
+    }
+
+    async fn logs(&self, ext: &Extensions, filter: Filter) -> RpcResult<Vec<Log>> {
+        only_full_access(ext)?;
+        proxy_filter_call!(self.client, logs, filter)
     }
 }
