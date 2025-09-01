@@ -5,28 +5,23 @@ use alloy::serde::JsonStorageKey;
 use alloy_network_primitives::ReceiptResponse;
 use alloy_rlp::Decodable;
 use alloy_rpc_types::{
-    BlockNumberOrTag, FeeHistory, Filter, Header, Log, TransactionRequest, TransactionTrait,
+    BlockNumberOrTag, FeeHistory, Filter, Log, TransactionRequest, TransactionTrait,
 };
 use hyper::http::Extensions;
 use jsonrpsee::core::{RpcResult, async_trait};
 use jsonrpsee::http_client::HttpClient;
 use reth_primitives::TransactionSigned;
-use reth_rpc_api::{EthApiClient, EthFilterApiClient};
 use scroll_alloy_rpc_types::{ScrollTransactionReceipt as Receipt, Transaction};
 
 use super::error::{proxy_call_failed, unauthorized};
-use super::interface::{Block, EthRpcProxyServer, ScrollRpcProxyClient, ScrollRpcProxyServer};
+use super::interface::{
+    Block, EthRpcProxyClient, EthRpcProxyServer, ScrollRpcProxyClient, ScrollRpcProxyServer,
+};
 use crate::auth::AccessLevel;
 
 macro_rules! proxy_call {
     ($client:expr, $method:ident $(, $arg:expr )* ) => {
-        EthApiClient::<TransactionRequest, Transaction, Block, Receipt, Header>::$method(&$client $(, $arg )*).await.map_err(|e| proxy_call_failed(e))
-    };
-}
-
-macro_rules! proxy_filter_call {
-    ($client:expr, $method:ident $(, $arg:expr )* ) => {
-        EthFilterApiClient::<()>::$method(&$client $(, $arg )*).await.map_err(proxy_call_failed)
+        EthRpcProxyClient::$method(&$client $(, $arg )*).await.map_err(|e| proxy_call_failed(e))
     };
 }
 
@@ -218,7 +213,7 @@ impl EthRpcProxyServer for RpcProxyImpl {
         block_number: Option<BlockId>,
     ) -> RpcResult<Bytes> {
         only_full_access(ext)?;
-        proxy_call!(self.client, call, request, block_number, None, None)
+        proxy_call!(self.client, call, request, block_number)
     }
 
     async fn estimate_gas(
@@ -228,7 +223,7 @@ impl EthRpcProxyServer for RpcProxyImpl {
         block_number: Option<BlockId>,
     ) -> RpcResult<U256> {
         only_full_access(ext)?;
-        proxy_call!(self.client, estimate_gas, request, block_number, None)
+        proxy_call!(self.client, estimate_gas, request, block_number)
     }
 
     async fn gas_price(&self, _ext: &Extensions) -> RpcResult<U256> {
@@ -291,6 +286,6 @@ impl EthRpcProxyServer for RpcProxyImpl {
 
     async fn logs(&self, ext: &Extensions, filter: Filter) -> RpcResult<Vec<Log>> {
         only_full_access(ext)?;
-        proxy_filter_call!(self.client, logs, filter)
+        proxy_call!(self.client, logs, filter)
     }
 }
