@@ -227,11 +227,11 @@ impl EthRpcProxyServer for RpcProxyImpl {
     }
 
     async fn gas_price(&self, _ext: &Extensions) -> RpcResult<U256> {
-        proxy_call!(self.client, gas_price)
+        Ok(U256::ZERO) // gas is free
     }
 
     async fn max_priority_fee_per_gas(&self, _ext: &Extensions) -> RpcResult<U256> {
-        proxy_call!(self.client, max_priority_fee_per_gas)
+        Ok(U256::ZERO) // gas is free
     }
 
     async fn fee_history(
