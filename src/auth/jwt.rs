@@ -67,8 +67,10 @@ impl JwtSigner {
             .ok_or_else(|| anyhow::anyhow!("Current signing key not found"))?;
 
         // Store key ID in the JWT header
-        let mut header = Header::default();
-        header.kid = Some(entry.kid.clone());
+        let header = Header {
+            kid: Some(entry.kid.clone()),
+            ..Default::default()
+        };
 
         let claims = UserClaims {
             address: addr.into(),
