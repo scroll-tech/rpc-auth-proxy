@@ -22,7 +22,7 @@ use tracing_subscriber::EnvFilter;
 
 use service::{RpcLoggerMiddleware, log_request};
 
-fn all_apis(
+async fn all_apis(
     jwt: JwtSigner,
     jwt_expiry_secs: usize,
     upstream_url: &str,
@@ -72,7 +72,8 @@ pub async fn run_server() -> anyhow::Result<SocketAddr> {
     info!("Server is listening on {addr}");
     info!("Upstream endpoint is {}", cfg.upstream_url);
 
-    let handle = server.start(all_apis(jwt, cfg.jwt_expiry_secs, &cfg.upstream_url)?);
+    let methods = all_apis(jwt, cfg.jwt_expiry_secs, &cfg.upstream_url).await?;
+    let handle = server.start(methods);
     handle.stopped().await;
     Ok(addr)
 }

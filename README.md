@@ -22,8 +22,32 @@ You can configure the proxy server via an optional `config.toml` file or command
 `config.toml` example:
 
 ```toml
-bind_address = "0.0.0.0:8080"
+# The address for the server to bind to
+bind_address = "0.0.0.0:8090"
+
+# The upstream HTTP endpoint (e.g. for forwarding requests)
 upstream_url = "http://validium-sequencer:8545"
+
+# List of admin API tokens. Only users with these tokens can access admin functions.
+admin_keys = [
+  "admin-token-1-abcdefg",
+  "admin-token-2-hijklmn"
+]
+
+# JWT token expiry in seconds
+# Timeout is not exact, there is a 60s leeway by default
+jwt_expiry_secs = 3600
+
+# The key ID used to sign new JWT tokens.
+# This must match the 'kid' of one of the entries in 'jwt_signer_keys'.
+default_kid = "key-2025-07"
+
+# JWT signer keys; to invalidate a key, simply remove its entry.
+# Each key must have a unique 'kid' (key ID).
+jwt_signer_keys = [
+    { kid = "key-2025-07", secret = "supersecret1" },
+    { kid = "key-2025-06", secret = "supersecret2" }
+]
 ```
 
 ### Override with CLI
@@ -43,6 +67,16 @@ If not specified, `bind_address` defaults to `0.0.0.0:8080`, `upstream_url` defa
 ### Precedence
 
 Precedence order for configuration is: CLI arguments > `config.toml` > defaults.
+
+## SIWE Authentication & Signature Verification
+
+This proxy server supports Sign-In with Ethereum (SIWE) authentication with comprehensive signature verification for different account types:
+
+1. EOA (Externally Owned Accounts): Traditional ECDSA signature verification.
+
+2. Smart Contract Accounts: ERC-1271 signature verification via onchain calls.
+
+3. EIP-7702 Accounts: Hybrid verification supporting both contract and EOA signatures.
 
 ## Authorization & Admin Key Management
 
