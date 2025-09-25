@@ -1,4 +1,4 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+FROM lukemathwalker/cargo-chef:0.1.72-rust-1.90 AS chef
 
 # ---- Planner stage ----
 
