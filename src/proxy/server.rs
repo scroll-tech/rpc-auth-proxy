@@ -13,9 +13,10 @@ use jsonrpsee::http_client::HttpClient;
 use reth_primitives::TransactionSigned;
 use scroll_alloy_rpc_types::{ScrollTransactionReceipt as Receipt, Transaction};
 
-use super::error::{proxy_call_failed, unauthorized};
+use super::error::{internal_error, proxy_call_failed, unauthorized};
 use super::interface::{
     Block, EthRpcProxyClient, EthRpcProxyServer, ScrollRpcProxyClient, ScrollRpcProxyServer,
+    Withdrawal,
 };
 use crate::auth::AccessLevel;
 
@@ -44,13 +45,21 @@ fn only_full_access(ext: &Extensions) -> RpcResult<()> {
 }
 
 pub struct RpcProxyImpl {
-    client: HttpClient,
+    validium_client: HttpClient,
+    withdraw_proofs_client: HttpClient,
 }
 
 impl RpcProxyImpl {
-    pub fn new(target: impl AsRef<str>) -> anyhow::Result<Self> {
-        let client = HttpClient::builder().build(target)?;
-        Ok(Self { client })
+    pub fn new(
+        validium_url: impl AsRef<str>,
+        withdraw_proofs_url: impl AsRef<str>,
+    ) -> anyhow::Result<Self> {
+        let validium_client = HttpClient::builder().build(validium_url)?;
+        let withdraw_proofs_client = HttpClient::builder().build(withdraw_proofs_url)?;
+        Ok(Self {
+            validium_client,
+            withdraw_proofs_client,
+        })
     }
 }
 
@@ -63,20 +72,100 @@ impl ScrollRpcProxyServer for RpcProxyImpl {
         mode: String,
     ) -> RpcResult<Option<Vec<Transaction>>> {
         only_full_access(ext)?;
-        ScrollRpcProxyClient::l1_messages_in_block(&self.client, block_id, mode)
+        ScrollRpcProxyClient::l1_messages_in_block(&self.validium_client, block_id, mode)
             .await
             .map_err(proxy_call_failed)
+    }
+
+    async fn withdrawals_by_transaction(
+        &self,
+        ext: &Extensions,
+        tx_hash: B256,
+    ) -> RpcResult<Vec<Withdrawal>> {
+        let access = get_access(ext);
+
+        // pre-check before proxy call
+        if access == &AccessLevel::None {
+            return Err(unauthorized());
+        }
+
+        // proxy call
+        let ws =
+            ScrollRpcProxyClient::withdrawals_by_transaction(&self.withdraw_proofs_client, tx_hash)
+                .await
+                .map_err(proxy_call_failed)?;
+
+        if ws.is_empty() || access == &AccessLevel::Full {
+            return Ok(ws);
+        }
+
+        // only allow sender to query the transaction
+        let maybe_tx = proxy_call!(self.validium_client, transaction_by_hash, tx_hash)?;
+
+        let tx = match maybe_tx {
+            // If we found the withdrawal, the transaction must exist
+            None => return Err(internal_error("transaction not found")),
+            Some(tx) => tx,
+        };
+
+        if access.is_authorized(&tx.as_recovered().signer()) {
+            return Ok(ws);
+        }
+
+        Err(unauthorized())
+    }
+
+    async fn withdrawal_by_message_hash(
+        &self,
+        ext: &Extensions,
+        message_hash: B256,
+    ) -> RpcResult<Option<Withdrawal>> {
+        let access = get_access(ext);
+
+        // pre-check before proxy call
+        if access == &AccessLevel::None {
+            return Err(unauthorized());
+        }
+
+        // proxy call
+        let maybe_w = ScrollRpcProxyClient::withdrawal_by_message_hash(
+            &self.withdraw_proofs_client,
+            message_hash,
+        )
+        .await
+        .map_err(proxy_call_failed)?;
+
+        if maybe_w.is_none() || access == &AccessLevel::Full {
+            return Ok(maybe_w);
+        }
+
+        let w = maybe_w.expect("checked above");
+
+        // only allow sender to query the transaction
+        let maybe_tx = proxy_call!(self.validium_client, transaction_by_hash, w.tx_hash)?;
+
+        let tx = match maybe_tx {
+            // If we found the withdrawal, the transaction must exist
+            None => return Err(internal_error("transaction not found")),
+            Some(tx) => tx,
+        };
+
+        if access.is_authorized(&tx.as_recovered().signer()) {
+            return Ok(Some(w));
+        }
+
+        Err(unauthorized())
     }
 }
 
 #[async_trait]
 impl EthRpcProxyServer for RpcProxyImpl {
     async fn block_number(&self, _ext: &Extensions) -> RpcResult<U256> {
-        proxy_call!(self.client, block_number)
+        proxy_call!(self.validium_client, block_number)
     }
 
     async fn chain_id(&self, _ext: &Extensions) -> RpcResult<Option<U64>> {
-        proxy_call!(self.client, chain_id)
+        proxy_call!(self.validium_client, chain_id)
     }
 
     async fn block_by_hash(
@@ -86,7 +175,7 @@ impl EthRpcProxyServer for RpcProxyImpl {
         full: bool,
     ) -> RpcResult<Option<Block>> {
         only_full_access(ext)?;
-        proxy_call!(self.client, block_by_hash, hash, full)
+        proxy_call!(self.validium_client, block_by_hash, hash, full)
     }
 
     async fn block_by_number(
@@ -96,7 +185,7 @@ impl EthRpcProxyServer for RpcProxyImpl {
         full: bool,
     ) -> RpcResult<Option<Block>> {
         only_full_access(ext)?;
-        proxy_call!(self.client, block_by_number, number, full)
+        proxy_call!(self.validium_client, block_by_number, number, full)
     }
 
     async fn balance(
@@ -106,7 +195,7 @@ impl EthRpcProxyServer for RpcProxyImpl {
         block_number: Option<BlockId>,
     ) -> RpcResult<U256> {
         only_authorized(ext, &address)?;
-        proxy_call!(self.client, balance, address, block_number)
+        proxy_call!(self.validium_client, balance, address, block_number)
     }
 
     async fn storage_at(
@@ -117,7 +206,13 @@ impl EthRpcProxyServer for RpcProxyImpl {
         block_number: Option<BlockId>,
     ) -> RpcResult<B256> {
         only_full_access(ext)?;
-        proxy_call!(self.client, storage_at, address, index, block_number)
+        proxy_call!(
+            self.validium_client,
+            storage_at,
+            address,
+            index,
+            block_number
+        )
     }
 
     async fn transaction_by_hash(
@@ -133,7 +228,7 @@ impl EthRpcProxyServer for RpcProxyImpl {
         }
 
         // proxy call
-        let maybe_tx = proxy_call!(self.client, transaction_by_hash, hash)?;
+        let maybe_tx = proxy_call!(self.validium_client, transaction_by_hash, hash)?;
 
         let tx = match maybe_tx {
             None => return Ok(None),
@@ -166,7 +261,7 @@ impl EthRpcProxyServer for RpcProxyImpl {
         }
 
         // proxy call
-        let maybe_receipt = proxy_call!(self.client, transaction_receipt, hash)?;
+        let maybe_receipt = proxy_call!(self.validium_client, transaction_receipt, hash)?;
 
         let receipt = match maybe_receipt {
             None => return Ok(None),
@@ -193,7 +288,12 @@ impl EthRpcProxyServer for RpcProxyImpl {
         block_number: Option<BlockId>,
     ) -> RpcResult<U256> {
         only_authorized(ext, &address)?;
-        proxy_call!(self.client, transaction_count, address, block_number)
+        proxy_call!(
+            self.validium_client,
+            transaction_count,
+            address,
+            block_number
+        )
     }
 
     async fn get_code(
@@ -203,7 +303,7 @@ impl EthRpcProxyServer for RpcProxyImpl {
         block_number: Option<BlockId>,
     ) -> RpcResult<Bytes> {
         only_full_access(ext)?;
-        proxy_call!(self.client, get_code, address, block_number)
+        proxy_call!(self.validium_client, get_code, address, block_number)
     }
 
     async fn call(
@@ -213,7 +313,7 @@ impl EthRpcProxyServer for RpcProxyImpl {
         block_number: Option<BlockId>,
     ) -> RpcResult<Bytes> {
         only_full_access(ext)?;
-        proxy_call!(self.client, call, request, block_number)
+        proxy_call!(self.validium_client, call, request, block_number)
     }
 
     async fn estimate_gas(
@@ -223,7 +323,7 @@ impl EthRpcProxyServer for RpcProxyImpl {
         block_number: Option<BlockId>,
     ) -> RpcResult<U256> {
         only_full_access(ext)?;
-        proxy_call!(self.client, estimate_gas, request, block_number)
+        proxy_call!(self.validium_client, estimate_gas, request, block_number)
     }
 
     async fn gas_price(&self, _ext: &Extensions) -> RpcResult<U256> {
@@ -242,7 +342,7 @@ impl EthRpcProxyServer for RpcProxyImpl {
         reward_percentiles: Option<Vec<f64>>,
     ) -> RpcResult<FeeHistory> {
         proxy_call!(
-            self.client,
+            self.validium_client,
             fee_history,
             block_count,
             newest_block,
@@ -281,11 +381,11 @@ impl EthRpcProxyServer for RpcProxyImpl {
             }
         }
 
-        proxy_call!(self.client, send_raw_transaction, bytes)
+        proxy_call!(self.validium_client, send_raw_transaction, bytes)
     }
 
     async fn logs(&self, ext: &Extensions, filter: Filter) -> RpcResult<Vec<Log>> {
         only_full_access(ext)?;
-        proxy_call!(self.client, logs, filter)
+        proxy_call!(self.validium_client, logs, filter)
     }
 }

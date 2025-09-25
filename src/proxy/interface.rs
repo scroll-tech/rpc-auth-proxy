@@ -8,8 +8,22 @@ use alloy_rpc_types::{
 };
 use jsonrpsee::core::RpcResult;
 use scroll_alloy_rpc_types::{ScrollTransactionReceipt as Receipt, Transaction};
+use serde::{Deserialize, Serialize};
 
 pub type Block = EthBlock<Transaction>;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Withdrawal {
+    pub tx_hash: B256,
+    pub message_hash: B256,
+    pub from: Address,
+    pub to: Address,
+    pub value: U256,
+    pub nonce: u64,
+    pub message: Bytes,
+    pub batch_index: u64,
+    pub proof: Bytes,
+}
 
 #[rpc(server, client, namespace = "scroll")]
 pub trait ScrollRpcProxy {
@@ -19,6 +33,13 @@ pub trait ScrollRpcProxy {
         block_id: String,
         mode: String,
     ) -> RpcResult<Option<Vec<Transaction>>>;
+
+    #[method(name = "withdrawalsByTransaction", with_extensions)]
+    async fn withdrawals_by_transaction(&self, tx_hash: B256) -> RpcResult<Vec<Withdrawal>>;
+
+    #[method(name = "withdrawalByMessageHash", with_extensions)]
+    async fn withdrawal_by_message_hash(&self, message_hash: B256)
+    -> RpcResult<Option<Withdrawal>>;
 }
 
 // see https://github.com/paradigmxyz/reth/blob/main/crates/rpc/rpc-eth-api/src/core.rs

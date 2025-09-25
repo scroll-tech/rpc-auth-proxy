@@ -23,13 +23,13 @@ You can configure the proxy server via an optional `config.toml` file or command
 
 ```toml
 bind_address = "0.0.0.0:8080"
-upstream_url = "http://validium-sequencer:8545"
+validium_url = "http://validium-sequencer:8545"
 ```
 
 ### Override with CLI
 
 ```sh
-cargo run -- --bind-address 127.0.0.1:9000 --upstream-url http://localhost:8545
+cargo run -- --bind-address 127.0.0.1:9000 --validium-url http://localhost:8545
 ```
 
 ### Config file path
@@ -38,7 +38,7 @@ By default, the server uses `config.toml` in the current directory. You can use 
 
 ### Defaults
 
-If not specified, `bind_address` defaults to `0.0.0.0:8080`, `upstream_url` defaults to `http://validium-sequencer:8545`.
+If not specified, `bind_address` defaults to `0.0.0.0:8080`, `validium_url` defaults to `http://validium-sequencer:8545`.
 
 ### Precedence
 
