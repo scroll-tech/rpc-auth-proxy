@@ -1,8 +1,11 @@
 # The address for the server to bind to
 bind_address = "0.0.0.0:1234"
 
-# The validium HTTP endpoint (e.g. for forwarding requests)
+# The validium RPC endpoint
 validium_url = "https://rpc.scroll.io"
+
+# The withdraw-proofs RPC endpoint
+withdraw_proofs_url = "http://withdraw-proofs-service:3000"
 
 # List of admin API tokens. Only users with these tokens can access admin functions.
 admin_keys = [
