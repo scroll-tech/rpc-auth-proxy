@@ -1,9 +1,13 @@
 use jsonrpsee::core::ClientError;
 use jsonrpsee::types::ErrorObjectOwned;
-use jsonrpsee::types::error::{INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG};
+use jsonrpsee::types::error::{INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG, INVALID_REQUEST_CODE};
 
 pub fn unauthorized() -> ErrorObjectOwned {
-    ErrorObjectOwned::owned(INTERNAL_ERROR_CODE, "unauthorized", Some("unauthorized"))
+    ErrorObjectOwned::owned(INVALID_REQUEST_CODE, "unauthorized", Some("unauthorized"))
+}
+
+pub fn internal_error(msg: impl AsRef<str>) -> ErrorObjectOwned {
+    ErrorObjectOwned::owned(INTERNAL_ERROR_CODE, "internal_error", Some(msg.as_ref()))
 }
 
 pub fn proxy_call_failed(e: ClientError) -> ErrorObjectOwned {

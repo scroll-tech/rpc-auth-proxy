@@ -1,8 +1,8 @@
 # The address for the server to bind to
 bind_address = "0.0.0.0:1234"
 
-# The upstream HTTP endpoint (e.g. for forwarding requests)
-upstream_url = "https://rpc.scroll.io"
+# The validium HTTP endpoint (e.g. for forwarding requests)
+validium_url = "https://rpc.scroll.io"
 
 # List of admin API tokens. Only users with these tokens can access admin functions.
 admin_keys = [
