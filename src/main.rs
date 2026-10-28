@@ -26,11 +26,14 @@ fn all_apis(
     jwt: JwtSigner,
     jwt_expiry_secs: usize,
     validium_url: &str,
-    withdraw_proofs_url: &str,
+    withdraw_proofs_url: Option<&str>,
+    forward_gas_prices: bool,
 ) -> anyhow::Result<impl Into<Methods>> {
     let auth_server = SiweAuthRpcImpl::new(jwt, jwt_expiry_secs);
-    let eth_proxy_server = RpcProxyImpl::new(validium_url, withdraw_proofs_url)?;
-    let scroll_proxy_server = RpcProxyImpl::new(validium_url, withdraw_proofs_url)?;
+    let eth_proxy_server =
+        RpcProxyImpl::new(validium_url, withdraw_proofs_url, forward_gas_prices)?;
+    let scroll_proxy_server =
+        RpcProxyImpl::new(validium_url, withdraw_proofs_url, forward_gas_prices)?;
 
     let mut module = RpcModule::new(());
     module.merge(SiweAuthRpcServer::into_rpc(auth_server))?;
@@ -72,13 +75,14 @@ pub async fn run_server() -> anyhow::Result<SocketAddr> {
     let addr = server.local_addr()?;
     info!("Server is listening on {addr}");
     info!("Validium endpoint is {}", cfg.validium_url);
-    info!("Withdraw proofs endpoint is {}", cfg.withdraw_proofs_url);
+    info!("Withdraw proofs endpoint is {:?}", cfg.withdraw_proofs_url);
 
     let handle = server.start(all_apis(
         jwt,
         cfg.jwt_expiry_secs,
         &cfg.validium_url,
-        &cfg.withdraw_proofs_url,
+        cfg.withdraw_proofs_url.as_deref(),
+        cfg.forward_gas_prices,
     )?);
     handle.stopped().await;
     Ok(addr)

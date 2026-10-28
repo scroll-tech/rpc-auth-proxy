@@ -125,3 +125,11 @@ For a graceful key rotation (phased removal):
 1. Treat JWT signer keys as sensitive credentials.
 
 2. Rotate keys regularly for better security.
+
+### Scroll mainnet
+
+The mainnet deployment uses `--forward-gas-prices` to forward `eth_gasPrice` and `eth_maxPriorityFeePerGas` to the bootnode-backed upstream. The default remains zero for existing gas-free deployments. `--disable-withdraw-proofs` disables both withdrawal-proof RPCs with an explicit error; it is used on mainnet because that service is not deployed there. Without that flag, configure `withdraw_proofs_url` for deployments that provide the service.
+
+The mainnet instance is deliberately limited to one replica: SIWE nonces are stored in process memory. A restart invalidates outstanding nonces. RPC access still requires the method's usual proxy authorization in addition to Cloudflare Access.
+
+Every push to main publishes an immutable ECR image tagged with the full commit SHA; deployment is a separate reviewed Helm tag update. See the Helm chart README for the one-time bootstrap and secret provisioning steps.

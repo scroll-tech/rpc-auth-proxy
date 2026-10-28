@@ -46,19 +46,24 @@ fn only_full_access(ext: &Extensions) -> RpcResult<()> {
 
 pub struct RpcProxyImpl {
     validium_client: HttpClient,
-    withdraw_proofs_client: HttpClient,
+    withdraw_proofs_client: Option<HttpClient>,
+    forward_gas_prices: bool,
 }
 
 impl RpcProxyImpl {
     pub fn new(
         validium_url: impl AsRef<str>,
-        withdraw_proofs_url: impl AsRef<str>,
+        withdraw_proofs_url: Option<&str>,
+        forward_gas_prices: bool,
     ) -> anyhow::Result<Self> {
         let validium_client = HttpClient::builder().build(validium_url)?;
-        let withdraw_proofs_client = HttpClient::builder().build(withdraw_proofs_url)?;
+        let withdraw_proofs_client = withdraw_proofs_url
+            .map(|url| HttpClient::builder().build(url))
+            .transpose()?;
         Ok(Self {
             validium_client,
             withdraw_proofs_client,
+            forward_gas_prices,
         })
     }
 }
@@ -89,11 +94,14 @@ impl ScrollRpcProxyServer for RpcProxyImpl {
             return Err(unauthorized());
         }
 
+        let client = self
+            .withdraw_proofs_client
+            .as_ref()
+            .ok_or_else(|| internal_error("withdrawal proof RPCs are not configured"))?;
         // proxy call
-        let ws =
-            ScrollRpcProxyClient::withdrawals_by_transaction(&self.withdraw_proofs_client, tx_hash)
-                .await
-                .map_err(proxy_call_failed)?;
+        let ws = ScrollRpcProxyClient::withdrawals_by_transaction(client, tx_hash)
+            .await
+            .map_err(proxy_call_failed)?;
 
         if ws.is_empty() || access == &AccessLevel::Full {
             return Ok(ws);
@@ -127,13 +135,14 @@ impl ScrollRpcProxyServer for RpcProxyImpl {
             return Err(unauthorized());
         }
 
+        let client = self
+            .withdraw_proofs_client
+            .as_ref()
+            .ok_or_else(|| internal_error("withdrawal proof RPCs are not configured"))?;
         // proxy call
-        let maybe_w = ScrollRpcProxyClient::withdrawal_by_message_hash(
-            &self.withdraw_proofs_client,
-            message_hash,
-        )
-        .await
-        .map_err(proxy_call_failed)?;
+        let maybe_w = ScrollRpcProxyClient::withdrawal_by_message_hash(client, message_hash)
+            .await
+            .map_err(proxy_call_failed)?;
 
         if maybe_w.is_none() || access == &AccessLevel::Full {
             return Ok(maybe_w);
@@ -327,11 +336,19 @@ impl EthRpcProxyServer for RpcProxyImpl {
     }
 
     async fn gas_price(&self, _ext: &Extensions) -> RpcResult<U256> {
-        Ok(U256::ZERO) // gas is free
+        if self.forward_gas_prices {
+            proxy_call!(self.validium_client, gas_price)
+        } else {
+            Ok(U256::ZERO)
+        }
     }
 
     async fn max_priority_fee_per_gas(&self, _ext: &Extensions) -> RpcResult<U256> {
-        Ok(U256::ZERO) // gas is free
+        if self.forward_gas_prices {
+            proxy_call!(self.validium_client, max_priority_fee_per_gas)
+        } else {
+            Ok(U256::ZERO)
+        }
     }
 
     async fn fee_history(
@@ -387,5 +404,77 @@ impl EthRpcProxyServer for RpcProxyImpl {
     async fn logs(&self, ext: &Extensions, filter: Filter) -> RpcResult<Vec<Log>> {
         only_full_access(ext)?;
         proxy_call!(self.validium_client, logs, filter)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use jsonrpsee::{RpcModule, server::ServerBuilder};
+
+    #[tokio::test]
+    async fn gas_prices_follow_configured_mode() {
+        let server = ServerBuilder::default().build("127.0.0.1:0").await.unwrap();
+        let address = server.local_addr().unwrap();
+        let mut methods = RpcModule::new(());
+        methods
+            .register_method("eth_gasPrice", |_, _, _| U256::from(42))
+            .unwrap();
+        methods
+            .register_method("eth_maxPriorityFeePerGas", |_, _, _| U256::from(7))
+            .unwrap();
+        let handle = server.start(methods);
+        let url = format!("http://{address}");
+        let free = RpcProxyImpl::new(&url, None, false).unwrap();
+        let forwarded = RpcProxyImpl::new(&url, None, true).unwrap();
+        let ext = Extensions::new();
+        assert_eq!(
+            EthRpcProxyServer::gas_price(&free, &ext).await.unwrap(),
+            U256::ZERO
+        );
+        assert_eq!(
+            EthRpcProxyServer::max_priority_fee_per_gas(&free, &ext)
+                .await
+                .unwrap(),
+            U256::ZERO
+        );
+        assert_eq!(
+            EthRpcProxyServer::gas_price(&forwarded, &ext)
+                .await
+                .unwrap(),
+            U256::from(42)
+        );
+        assert_eq!(
+            EthRpcProxyServer::max_priority_fee_per_gas(&forwarded, &ext)
+                .await
+                .unwrap(),
+            U256::from(7)
+        );
+        handle.stop().unwrap();
+    }
+
+    #[tokio::test]
+    async fn missing_withdrawal_service_is_explicit() {
+        let proxy = RpcProxyImpl::new("http://127.0.0.1:1", None, true).unwrap();
+        let mut ext = Extensions::new();
+        ext.insert(AccessLevel::Full);
+        let err = ScrollRpcProxyServer::withdrawals_by_transaction(&proxy, &ext, B256::ZERO)
+            .await
+            .unwrap_err();
+        assert!(
+            err.data()
+                .unwrap()
+                .get()
+                .contains("withdrawal proof RPCs are not configured")
+        );
+        let err = ScrollRpcProxyServer::withdrawal_by_message_hash(&proxy, &ext, B256::ZERO)
+            .await
+            .unwrap_err();
+        assert!(
+            err.data()
+                .unwrap()
+                .get()
+                .contains("withdrawal proof RPCs are not configured")
+        );
     }
 }

@@ -1,0 +1,29 @@
+name: Publish ECR image
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::186312734932:role/rpc-auth-proxy-github-actions-ecr-push
+          aws-region: us-west-2
+      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: >-
+            186312734932.dkr.ecr.us-west-2.amazonaws.com/rpc-auth-proxy:${{ github.event_name == 'workflow_dispatch' && 'mainnet-bootstrap' || github.sha }}
