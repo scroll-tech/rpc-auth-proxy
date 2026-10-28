@@ -1,6 +1,5 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
-const NodePolyfillPlugin = require("node-polyfill-webpack-plugin")
 
 module.exports = {
   mode: 'development',
@@ -21,16 +20,16 @@ module.exports = {
       template: './src/index.html',
       filename: 'index.html'
     }),
-    new NodePolyfillPlugin(),
   ],
   devServer: {
-    proxy: {
-      '/api': {
+    proxy: [
+      {
+        context: ['/api'],
         target: 'http://127.0.0.1:1234',
         changeOrigin: true,
         pathRewrite: { '^/api': '' }
       }
-    }
+    ]
   }
 };
 
