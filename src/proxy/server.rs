@@ -418,10 +418,10 @@ mod tests {
         let address = server.local_addr().unwrap();
         let mut methods = RpcModule::new(());
         methods
-            .register_method("eth_gasPrice", |_, _, _| U256::from(42))
+            .register_method("eth_gasPrice", |_, _, _| "0x2a")
             .unwrap();
         methods
-            .register_method("eth_maxPriorityFeePerGas", |_, _, _| U256::from(7))
+            .register_method("eth_maxPriorityFeePerGas", |_, _, _| "0x7")
             .unwrap();
         let handle = server.start(methods);
         let url = format!("http://{address}");
