@@ -105,10 +105,7 @@ pub fn load_config() -> anyhow::Result<AppConfig> {
         && !url.starts_with("http://")
         && !url.starts_with("https://")
     {
-        anyhow::bail!(
-            "Invalid withdraw_proofs_url: {}. Must start with http:// or https://",
-            url
-        );
+        anyhow::bail!("Invalid withdraw_proofs_url: {url}. Must start with http:// or https://");
     }
 
     Ok(cfg)

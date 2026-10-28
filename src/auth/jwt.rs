@@ -50,7 +50,7 @@ impl JwtSigner {
 
         // Ensure default_kid exists in the key map
         if !map.contains_key(default_kid) {
-            anyhow::bail!("default_kid '{}' not found in jwt_signer_keys", default_kid);
+            anyhow::bail!("default_kid '{default_kid}' not found in jwt_signer_keys");
         }
 
         Ok(Self {
@@ -90,7 +90,7 @@ impl JwtSigner {
         let entry = self
             .keys
             .get(&kid)
-            .ok_or_else(|| anyhow::anyhow!("JWT signing key kid {} not found", kid))?;
+            .ok_or_else(|| anyhow::anyhow!("JWT signing key kid {kid} not found"))?;
 
         let token_data = decode(token.as_ref(), &entry.decoding, &Validation::default())?;
         Ok(token_data.claims)
