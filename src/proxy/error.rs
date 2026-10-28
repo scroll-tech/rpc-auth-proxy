@@ -1,9 +1,20 @@
 use jsonrpsee::core::ClientError;
 use jsonrpsee::types::ErrorObjectOwned;
-use jsonrpsee::types::error::{INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG, INVALID_REQUEST_CODE};
+use jsonrpsee::types::error::{
+    INTERNAL_ERROR_CODE, INTERNAL_ERROR_MSG, INVALID_PARAMS_CODE, INVALID_PARAMS_MSG,
+    INVALID_REQUEST_CODE,
+};
 
 pub fn unauthorized() -> ErrorObjectOwned {
     ErrorObjectOwned::owned(INVALID_REQUEST_CODE, "unauthorized", Some("unauthorized"))
+}
+
+pub fn invalid_params(details: impl AsRef<str>) -> ErrorObjectOwned {
+    ErrorObjectOwned::owned(
+        INVALID_PARAMS_CODE,
+        INVALID_PARAMS_MSG,
+        Some(details.as_ref()),
+    )
 }
 
 pub fn internal_error(msg: impl AsRef<str>) -> ErrorObjectOwned {
