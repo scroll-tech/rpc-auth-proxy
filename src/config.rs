@@ -19,6 +19,14 @@ struct CliArgs {
     /// Withdraw-proofs RPC endpoint to relay proxy requests to, e.g. http://cloak-withdraw-proofs:8545
     #[arg(long)]
     withdraw_proofs_url: Option<String>,
+
+    /// Forward gas price methods to the upstream instead of returning zero.
+    #[arg(long)]
+    forward_gas_prices: bool,
+
+    /// Disable withdrawal proof RPCs when no proof service is available.
+    #[arg(long)]
+    disable_withdraw_proofs: bool,
 }
 
 /// Structure of the config file
@@ -28,7 +36,9 @@ pub struct AppConfig {
     pub bind_address: String,
     #[serde(default = "default_validium_url")]
     pub validium_url: String,
-    pub withdraw_proofs_url: String,
+    pub withdraw_proofs_url: Option<String>,
+    #[serde(default)]
+    pub forward_gas_prices: bool,
     pub admin_keys: Vec<String>,
     pub jwt_expiry_secs: usize,
     pub default_kid: String,
@@ -62,7 +72,14 @@ pub fn load_config() -> anyhow::Result<AppConfig> {
         cfg.validium_url = val;
     }
     if let Some(val) = args.withdraw_proofs_url {
-        cfg.withdraw_proofs_url = val;
+        cfg.withdraw_proofs_url = Some(val);
+    }
+
+    if args.forward_gas_prices {
+        cfg.forward_gas_prices = true;
+    }
+    if args.disable_withdraw_proofs {
+        cfg.withdraw_proofs_url = None;
     }
 
     // Validate bind_address format
@@ -84,13 +101,11 @@ pub fn load_config() -> anyhow::Result<AppConfig> {
     }
 
     // Validate withdraw_proofs_url format
-    if !cfg.withdraw_proofs_url.starts_with("http://")
-        && !cfg.withdraw_proofs_url.starts_with("https://")
+    if let Some(url) = &cfg.withdraw_proofs_url
+        && !url.starts_with("http://")
+        && !url.starts_with("https://")
     {
-        anyhow::bail!(
-            "Invalid withdraw_proofs_url: {}. Must start with http:// or https://",
-            cfg.withdraw_proofs_url
-        );
+        anyhow::bail!("Invalid withdraw_proofs_url: {url}. Must start with http:// or https://");
     }
 
     Ok(cfg)
@@ -132,7 +147,10 @@ mod tests {
         // Check values
         assert_eq!(cfg.bind_address, "127.0.0.1:12345");
         assert_eq!(cfg.validium_url, "http://example.com:8545");
-        assert_eq!(cfg.withdraw_proofs_url, "http://example.com:8546");
+        assert_eq!(
+            cfg.withdraw_proofs_url.as_deref(),
+            Some("http://example.com:8546")
+        );
         assert_eq!(
             cfg.admin_keys,
             vec![

@@ -85,7 +85,7 @@ mod tests {
         // ----------- Test with admin key -----------
         let admin_key = &admin_keys[0];
         let mut map = HeaderMap::new();
-        let value = HeaderValue::from_str(&format!("Bearer {}", admin_key)).unwrap();
+        let value = HeaderValue::from_str(&format!("Bearer {admin_key}")).unwrap();
         map.insert("authorization", value);
 
         // Should grant Full access

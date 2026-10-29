@@ -1,7 +1,12 @@
 name: Build and Push Docker Image
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   docker:
@@ -18,7 +23,7 @@ jobs:
 
       - name: Extract commit digest
         id: vars
-        run: echo "sha8=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+        run: echo "sha8=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
 
       - name: Build and Push Docker image
         uses: docker/build-push-action@v6
