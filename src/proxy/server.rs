@@ -1,19 +1,19 @@
+use alloy::consensus::TxType;
 use alloy::consensus::transaction::{PooledTransaction, SignerRecoverable};
+use alloy::eips::eip2718::Decodable2718;
 use alloy::primitives::{Address, B256, Bytes, U64, U256};
 use alloy::rpc::types::BlockId;
 use alloy::serde::JsonStorageKey;
 use alloy_network_primitives::ReceiptResponse;
-use alloy_rlp::Decodable;
 use alloy_rpc_types::{
     BlockNumberOrTag, FeeHistory, Filter, Log, TransactionRequest, TransactionTrait,
 };
 use hyper::http::Extensions;
 use jsonrpsee::core::{RpcResult, async_trait};
 use jsonrpsee::http_client::HttpClient;
-use reth_primitives::TransactionSigned;
 use scroll_alloy_rpc_types::{ScrollTransactionReceipt as Receipt, Transaction};
 
-use super::error::{internal_error, proxy_call_failed, unauthorized};
+use super::error::{internal_error, invalid_params, proxy_call_failed, unauthorized};
 use super::interface::{
     Block, EthRpcProxyClient, EthRpcProxyServer, ScrollRpcProxyClient, ScrollRpcProxyServer,
     Withdrawal,
@@ -24,6 +24,23 @@ macro_rules! proxy_call {
     ($client:expr, $method:ident $(, $arg:expr )* ) => {
         EthRpcProxyClient::$method(&$client $(, $arg )*).await.map_err(|e| proxy_call_failed(e))
     };
+}
+
+fn reject_blob_transaction(bytes: &[u8]) -> RpcResult<()> {
+    if bytes.first() == Some(&u8::from(TxType::Eip4844)) {
+        return Err(invalid_params("blob transactions are not supported"));
+    }
+    Ok(())
+}
+
+// Exact EIP-2718 decoding: the checked transaction must be the one forwarded upstream.
+fn decode_raw_transaction(bytes: &[u8]) -> RpcResult<(PooledTransaction, Address)> {
+    let tx = PooledTransaction::decode_2718_exact(bytes)
+        .map_err(|e| invalid_params(format!("invalid transaction: {e}")))?;
+    let from = tx
+        .recover_signer()
+        .map_err(|e| invalid_params(format!("invalid signature: {e}")))?;
+    Ok((tx, from))
 }
 
 fn get_access(ext: &Extensions) -> &AccessLevel {
@@ -375,16 +392,12 @@ impl EthRpcProxyServer for RpcProxyImpl {
             return Err(unauthorized());
         }
 
+        reject_blob_transaction(&bytes)?;
+
         // for basic access, you can only send your own transactions,
         // and contract deployment is not allowed.
         if matches!(access, AccessLevel::Basic(_)) {
-            let mut slice: &[u8] = bytes.as_ref();
-            let tx: PooledTransaction = TransactionSigned::decode(&mut slice)
-                .unwrap()
-                .try_into()
-                .unwrap();
-
-            let from = tx.recover_signer().unwrap();
+            let (tx, from) = decode_raw_transaction(&bytes)?;
             let to = tx.to();
             let selector = tx.function_selector();
 
@@ -411,6 +424,13 @@ impl EthRpcProxyServer for RpcProxyImpl {
 mod tests {
     use super::*;
     use jsonrpsee::{RpcModule, server::ServerBuilder};
+
+    use alloy::consensus::{SignableTransaction, TxEip1559, TxEip4844, TxEnvelope, TxLegacy};
+    use alloy::eips::eip2718::Encodable2718;
+    use alloy::primitives::TxKind;
+    use alloy::signers::SignerSync;
+    use alloy::signers::local::PrivateKeySigner;
+    use jsonrpsee::types::error::INVALID_PARAMS_CODE;
 
     #[tokio::test]
     async fn gas_prices_follow_configured_mode() {
@@ -476,5 +496,80 @@ mod tests {
                 .get()
                 .contains("withdrawal proof RPCs are not configured")
         );
+    }
+
+    fn signed_eip1559(signer: &PrivateKeySigner) -> TxEnvelope {
+        let tx = TxEip1559 {
+            chain_id: 33333333,
+            to: TxKind::Call(Address::repeat_byte(0x11)),
+            gas_limit: 21_000,
+            ..Default::default()
+        };
+        let sig = signer.sign_hash_sync(&tx.signature_hash()).unwrap();
+        tx.into_signed(sig).into()
+    }
+
+    #[test]
+    fn decodes_typed_transaction_and_recovers_sender() {
+        let signer = PrivateKeySigner::random();
+        let bytes = signed_eip1559(&signer).encoded_2718();
+
+        let (tx, from) = decode_raw_transaction(&bytes).unwrap();
+        assert_eq!(from, signer.address());
+        assert_eq!(tx.to(), Some(Address::repeat_byte(0x11)));
+    }
+
+    #[test]
+    fn decodes_legacy_transaction() {
+        let signer = PrivateKeySigner::random();
+        let tx = TxLegacy {
+            chain_id: Some(33333333),
+            to: TxKind::Call(Address::repeat_byte(0x22)),
+            gas_limit: 21_000,
+            ..Default::default()
+        };
+        let sig = signer.sign_hash_sync(&tx.signature_hash()).unwrap();
+        let bytes = TxEnvelope::from(tx.into_signed(sig)).encoded_2718();
+
+        let (_, from) = decode_raw_transaction(&bytes).unwrap();
+        assert_eq!(from, signer.address());
+    }
+
+    #[test]
+    fn rejects_malformed_input_without_panicking() {
+        let signer = PrivateKeySigner::random();
+        let mut trailing = signed_eip1559(&signer).encoded_2718();
+        trailing.push(0x00);
+        let mut network_format = Vec::new();
+        signed_eip1559(&signer).network_encode(&mut network_format);
+
+        let cases: [&[u8]; 5] = [
+            &[],
+            &[0x02],
+            &[0xde, 0xad, 0xbe, 0xef],
+            &trailing,
+            &network_format,
+        ];
+        for bytes in cases {
+            let err = decode_raw_transaction(bytes).unwrap_err();
+            assert_eq!(err.code(), INVALID_PARAMS_CODE, "input {bytes:02x?}");
+        }
+    }
+
+    #[test]
+    fn rejects_blob_transaction() {
+        let signer = PrivateKeySigner::random();
+        let tx = TxEip4844 {
+            chain_id: 33333333,
+            to: Address::repeat_byte(0x33),
+            gas_limit: 21_000,
+            ..Default::default()
+        };
+        let sig = signer.sign_hash_sync(&tx.signature_hash()).unwrap();
+        let bytes = TxEnvelope::from(tx.into_signed(sig)).encoded_2718();
+
+        let err = reject_blob_transaction(&bytes).unwrap_err();
+        assert_eq!(err.code(), INVALID_PARAMS_CODE);
+        assert!(reject_blob_transaction(&signed_eip1559(&signer).encoded_2718()).is_ok());
     }
 }

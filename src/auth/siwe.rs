@@ -1,3 +1,6 @@
+// jsonrpsee 0.26 `#[rpc]` expands to async_trait code that trips this lint.
+#![allow(clippy::double_must_use)]
+
 use alloy::primitives::Bytes;
 use chrono::Utc;
 use jsonrpsee::core::{RpcResult, async_trait};
