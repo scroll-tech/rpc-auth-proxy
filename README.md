@@ -132,4 +132,4 @@ The mainnet deployment uses `--forward-gas-prices` to forward `eth_gasPrice` and
 
 The mainnet instance is deliberately limited to one replica: SIWE nonces are stored in process memory. A restart invalidates outstanding nonces. RPC access still requires the method's usual proxy authorization in addition to Cloudflare Access.
 
-Every push to main publishes a Docker Hub image at `scrolltech/cloak-rpc-auth-proxy` tagged with the first eight characters of the commit SHA. Deployment is a separate reviewed Helm tag update. Docker Hub tags can be overwritten; verify the published digest and use a digest for subsequent reviewed promotions when reproducibility matters. See the Helm chart README for the one-time bootstrap and secret provisioning steps.
+Every push to main publishes a Docker Hub image at `scrolltech/cloak-rpc-auth-proxy` tagged with the first eight characters of the commit SHA. Deployment is a separate reviewed Helm tag update. Docker Hub tags can be overwritten; verify the published digest and use a digest for subsequent reviewed promotions when reproducibility matters. See the Helm chart README for image selection and secret provisioning steps.

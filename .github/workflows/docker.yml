@@ -4,19 +4,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      mainnet_bootstrap:
-        description: Publish the one-time mainnet bootstrap tag from main
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
 jobs:
   docker:
-    # Preserve manual builds on other branches, but only bootstrap from main.
-    if: ${{ !inputs.mainnet_bootstrap || github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,19 +21,9 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Prepare image tags
+      - name: Extract commit digest
         id: vars
-        env:
-          MAINNET_BOOTSTRAP: ${{ inputs.mainnet_bootstrap }}
-        run: |
-          {
-            echo 'tags<<EOF'
-            echo "scrolltech/cloak-rpc-auth-proxy:${GITHUB_SHA::8}"
-            if [ "$MAINNET_BOOTSTRAP" = "true" ]; then
-              echo 'scrolltech/cloak-rpc-auth-proxy:mainnet-bootstrap'
-            fi
-            echo EOF
-          } >> "$GITHUB_OUTPUT"
+        run: echo "sha8=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
 
       - name: Build and Push Docker image
         uses: docker/build-push-action@v6
@@ -48,4 +31,4 @@ jobs:
           context: .
           platforms: linux/amd64
           push: true
-          tags: ${{ steps.vars.outputs.tags }}
+          tags: scrolltech/cloak-rpc-auth-proxy:${{ steps.vars.outputs.sha8 }}
